@@ -1,0 +1,26 @@
+{
+  "name": "grpc-web-simple-example",
+  "version": "0.1.0",
+  "description": "gRPC-Web simple example",
+  "devDependencies": {
+    "@grpc/grpc-js": "~1.1.8",
+    "@grpc/proto-loader": "~0.5.4",
+    "async": "~3.2.3",
+    "google-protobuf": "~3.21.4",
+    "grpc-web": "~1.5.0",
+    "lodash": "~4.17.0",
+    "webpack": "~5.82.1",
+    "webpack-cli": "~5.1.1"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "protoc-gen-js": "^3.21.4"
+  },
+  "main": "client.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

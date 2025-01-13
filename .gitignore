@@ -1,0 +1,35 @@
+
+# Ignorer les modules Node.js
+node_modules/
+
+# Ignorer les dossiers de cache Python
+__pycache__/
+*.py[cod]
+
+# Ignorer les fichiers de log
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ignorer les dossiers de build/compilation
+dist/
+build/
+
+# Ignorer les fichiers environnementaux
+.env
+.env.*
+
+# Ignorer les fichiers de configuration système
+.DS_Store
+Thumbs.db
+
+# Ignorer les fichiers générés par les éditeurs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignorer les fichiers de paquets Python
+*.egg-info/
+.eggs/
