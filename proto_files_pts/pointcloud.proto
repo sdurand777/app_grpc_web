@@ -1,0 +1,17 @@
+syntax = "proto3";
+package IVM.slam;
+
+// message point pour transmettre le pcd
+message Point {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// liste de points
+message PointCloud {
+  repeated Point points = 1;
+}
+
+
+

@@ -1,0 +1,13 @@
+syntax= "proto3";
+package IVM.slam;
+
+import "google/protobuf/empty.proto";
+import "pointcloud.proto";
+
+// deux services
+service SlamService {
+    // service pour recuperer les points du serveur
+    rpc GetPointCloud (google.protobuf.Empty) returns (stream PointCloud); // Utilisation correcte
+    // service pour envoyer les points au serveur
+    rpc ConnectPointCloud (stream PointCloud) returns (google.protobuf.Empty); // Utilisation correcte
+}
