@@ -13,5 +13,7 @@
 # Dans web_app_client lancer npm run server pour la prod ou npm start pour dev
 
 
+# pour application pts faire pareil mais avec web_app_client_pts et python_server_pts
+
 
 # app_grpc_web
