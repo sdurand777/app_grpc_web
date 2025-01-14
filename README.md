@@ -15,5 +15,9 @@
 
 # pour application pts faire pareil mais avec web_app_client_pts et python_server_pts
 
+# pour application slam faire pareil mais avec les dossiers extensions _slam
+# soit on gen les points avec le dossier python_client_source soir on gen les points direct avec un slam offline
+
+
 
 # app_grpc_web
