@@ -51,7 +51,8 @@ animate();
 
 
 // Crée un client gRPC-Web
-const client = new SlamServiceClient('http://localhost:8080', null, null);
+//const client = new SlamServiceClient('http://localhost:8080', null, null);
+const client = new SlamServiceClient('http://192.168.51.30:8080', null, null);
 
 // Appelle le serveur pour recevoir le flux de points
 const request = new Empty();
