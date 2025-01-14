@@ -36,29 +36,41 @@ let pointsMaterial = new THREE.PointsMaterial({
 });
 
 let positions = [];  // Tableau global pour stocker les positions des points
+let isUpdating = false;  // Flag pour contrôler l'ajout progressif des points
 
-// Fonction pour ajouter des points en une seule fois
-function addAllPoints(pointsList) {
-  // Vider les positions existantes pour mettre à jour avec les nouvelles
-  //positions = [];
-
-  // Remplir le tableau de positions avec les coordonnées de tous les points
-  pointsList.forEach((point) => {
-    const x = point.getX();
-    const y = point.getY();
-    const z = point.getZ();
-    positions.push(x, y, z);
-  });
-
-  // Mettre à jour la géométrie en une seule fois avec toutes les positions
+// Fonction pour ajouter un point à la scène
+function addPoints(x, y, z) {
+  positions.push(x, y, z);
   pointsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
 
-  // Si les points n'ont pas encore été ajoutés à la scène, les ajouter
   if (!scene.getObjectByName("points")) {
     const points = new THREE.Points(pointsGeometry, pointsMaterial);
     points.name = "points";  // Nommer l'objet pour le retrouver facilement
     scene.add(points);
   }
+}
+
+// Fonction pour ajouter progressivement les points
+function loadPointsGradually(pointsList) {
+  if (isUpdating) return;  // Empêche l'ajout si une mise à jour est déjà en cours
+
+  isUpdating = true;
+
+  // Utiliser requestAnimationFrame pour ajouter progressivement les points
+  let index = 0;
+
+  function addNextPoint() {
+    if (index < pointsList.length) {
+      const point = pointsList[index];
+      addPoints(point.getX(), point.getY(), point.getZ());
+      index++;
+      requestAnimationFrame(addNextPoint);  // Appel récursif pour ajouter les points progressivement
+    } else {
+      isUpdating = false;  // Fin de l'ajout progressif des points
+    }
+  }
+
+  addNextPoint();  // Démarre l'ajout progressif des points
 }
 
 // Fonction d'animation
@@ -78,7 +90,7 @@ const stream = client.getPointCloud(request, {});
 
 stream.on('data', (response) => {
   const points = response.getPointsList();
-  addAllPoints(points);  // Ajouter tous les points en une seule fois
+  loadPointsGradually(points);  // Ajouter les points progressivement
 });
 
 stream.on('error', (err) => {

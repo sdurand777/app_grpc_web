@@ -1,5 +1,6 @@
 
 const { SlamServiceClient } = require('./slam_service_grpc_web_pb.js');
+//const { Empty } = require('./pointcloud_pb.js');
 const { Empty } = require('google-protobuf/google/protobuf/empty_pb.js');
 
 // Import de Three.js
@@ -11,7 +12,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 // Vérifiez la présence de l'objet THREE
 console.log(THREE);  // Vous devriez voir l'objet THREE dans la console
 
-// Création de la scène, de la caméra et du rendu
+// Test de création d'une scène
 const scene = new THREE.Scene();
 console.log(scene);  // Vous devriez voir une instance de THREE.Scene dans la console
 
@@ -27,33 +28,36 @@ camera.position.z = 5;
 // Ajouter les OrbitControls
 const controls = new OrbitControls(camera, renderer.domElement);
 
-// Créer un tableau pour stocker les positions des points
+// Créer un tableau pour stocker les sphères
+let spheres = [];
+
+// Fonction pour créer une sphère à partir des coordonnées x, y, z
+function createSphere(x, y, z) {
+  const geometry = new THREE.SphereGeometry(0.1, 32, 32);  // Rayon de 0.1, segments 32x32
+  const material = new THREE.MeshBasicMaterial({ color: 0x00ffff });  // Cyan
+  const sphere = new THREE.Mesh(geometry, material);
+  sphere.position.set(x, y, z);  // Positionner la sphère au point (x, y, z)
+  scene.add(sphere);  // Ajouter la sphère à la scène
+  spheres.push(sphere);  // Ajouter à notre tableau de sphères
+}
+
+
+// Créer un tableau pour stocker les points
 let pointsGeometry = new THREE.BufferGeometry();
 let pointsMaterial = new THREE.PointsMaterial({
-  color: 0xff0000,  // Rouge
+  color: 0xff0000,  // Cyan
   size: 0.1,        // Taille des points
   sizeAttenuation: true  // Appliquer une diminution de la taille selon la distance
 });
 
-let positions = [];  // Tableau global pour stocker les positions des points
 
-// Fonction pour ajouter des points en une seule fois
-function addAllPoints(pointsList) {
-  // Vider les positions existantes pour mettre à jour avec les nouvelles
-  //positions = [];
+// Créer un tableau pour stocker les positions des points
+let positions = [];
 
-  // Remplir le tableau de positions avec les coordonnées de tous les points
-  pointsList.forEach((point) => {
-    const x = point.getX();
-    const y = point.getY();
-    const z = point.getZ();
-    positions.push(x, y, z);
-  });
-
-  // Mettre à jour la géométrie en une seule fois avec toutes les positions
+// Fonction pour ajouter des points
+function addPoints(x, y, z) {
+  positions.push(x, y, z);
   pointsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-
-  // Si les points n'ont pas encore été ajoutés à la scène, les ajouter
   if (!scene.getObjectByName("points")) {
     const points = new THREE.Points(pointsGeometry, pointsMaterial);
     points.name = "points";  // Nommer l'objet pour le retrouver facilement
@@ -64,8 +68,12 @@ function addAllPoints(pointsList) {
 // Fonction d'animation
 function animate() {
   requestAnimationFrame(animate);
-  controls.update();  // Mettre à jour les contrôles
-  renderer.render(scene, camera);  // Rendre la scène
+
+  // Mettre à jour les contrôles pour permettre l'interaction
+  controls.update();
+
+  // Rendre la scène
+  renderer.render(scene, camera);
 }
 
 // Crée un client gRPC-Web
@@ -76,10 +84,41 @@ const request = new Empty();
 
 const stream = client.getPointCloud(request, {});
 
+// stream.on('data', (response) => {
+//   const points = response.getPointsList();
+//   points.forEach((point) => {
+//     const x = point.getX();
+//     const y = point.getY();
+//     const z = point.getZ();
+//     console.log(`Point reçu: x=${x}, y=${y}, z=${z}`);
+//     
+//     // Créer une sphère pour chaque point
+//     createSphere(x, y, z);
+//   });
+// });
+
+
+
+
+
 stream.on('data', (response) => {
   const points = response.getPointsList();
-  addAllPoints(points);  // Ajouter tous les points en une seule fois
+  points.forEach((point) => {
+    const x = point.getX();
+    const y = point.getY();
+    const z = point.getZ();
+    //console.log(`Point reçu: x=${x}, y=${y}, z=${z}`);
+    
+    // Ajouter un point à la scène
+    addPoints(x, y, z);
+  });
 });
+
+
+
+
+
+
 
 stream.on('error', (err) => {
   console.error('Erreur du flux:', err.message);

@@ -1,0 +1,30 @@
+syntax= "proto3";
+package IVM.slam;
+
+import "google/protobuf/empty.proto";
+import "pointcloud.proto";
+
+// deux services
+service SlamService {
+
+    // services de bases uniquements pour les coords points
+    // service pour recuperer les points du serveur
+    rpc GetPointCloud (google.protobuf.Empty) returns (stream PointCloud); // Utilisation correcte
+    // service pour envoyer les points au serveur
+    rpc ConnectPointCloud (stream PointCloud) returns (google.protobuf.Empty); // Utilisation correcte
+
+    // services points et poses
+    // Service pour récupérer les points et la pose du serveur
+    rpc GetPointCloudWithPose (google.protobuf.Empty) returns (stream PointCloudWithPose);
+    // Service pour envoyer les points et la pose au serveur
+    rpc ConnectPointCloudWithPose (stream PointCloudWithPose) returns (google.protobuf.Empty);
+
+
+    // services data slam liste de points et liste de pose et index
+    // Service pour récupérer les points et la pose du serveur
+    rpc GetSlamData (google.protobuf.Empty) returns (stream SlamData);
+    // Service pour envoyer les points et la pose au serveur
+    rpc ConnectSlamData (stream SlamData) returns (google.protobuf.Empty);
+
+
+}

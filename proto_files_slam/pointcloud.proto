@@ -1,0 +1,65 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+package IVM.slam;
+
+// message point pour transmettre le pcd
+message Point {
+    double x = 1;
+    double y = 2;
+    double z = 3;
+    double r = 4;
+    double g = 5;
+    double b = 6;
+}
+
+// liste de points
+message PointCloud {
+    repeated Point points = 1;
+}
+
+
+// Message pour transmettre une matrice 4x4 (pose de la caméra)
+message Pose {
+    repeated double matrix = 1; // 16 valeurs pour la matrice 4x4
+}
+
+
+// Message pour transmettre les indices a modifier dans le visualisateur
+message Index {
+    repeated int32 index = 1;
+}
+
+
+// liste de pointclouds pour chaque KFs
+message PointCloudList {
+    repeated PointCloud pointclouds = 1;
+}
+
+
+// liste de poses pour chaque KFs
+message PoseList {
+    repeated Pose poses = 1;
+}
+
+
+// Messages combinés pour le PCD et la pose
+message PointCloudWithPose {
+    PointCloud pointCloud = 1;
+    Pose pose = 2;
+}
+
+
+// message final pour la liste de PCD, la liste de poses et les indices des KFs
+message SlamData {
+    PointCloudList pointcloudlist = 1;
+    PoseList poselist = 2;
+    Index indexlist = 3;
+}
+
+
+
+
+
+
+
