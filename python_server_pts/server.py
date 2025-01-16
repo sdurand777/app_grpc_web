@@ -13,7 +13,7 @@ import numpy as np
 
 # sizes des listes pour chaque packages de data
 LISTE_SIZES = [20000,5000,7000,9000,13000,15000,17000,21000,23000]
-#LISTE_SIZES = [2000,5000,7000,9000,13000,15000,17000,21000,23000]
+#LISTE_SIZES = [1,1,1,1,1,1,1,1,1]
 
 class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
     def GetPointCloud(self, request, context):
@@ -22,7 +22,7 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
         for n, i in enumerate(LISTE_SIZES):  # Par exemple, envoyons 10 points
             #point = pointcloud_pb2.Point(x=i, y=i*2, z=i*3)
             #LISTE_SIZES.pop(0)
-            LISTE_SIZES[n] = 1
+            #LISTE_SIZES[n] = 1
 
             # Générer les points du nuage
             points_array = np.random.uniform(0, 5, (i, 3))
