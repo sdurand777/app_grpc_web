@@ -12,13 +12,13 @@ app.use(express.static(path.join(__dirname, 'public/dist')));
 
 // Route to serve the index.html
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/dist', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public/dist', 'index.html'));
 });
 
 // Start the server
 const port = 3000;
 const host = '0.0.0.0'; // Listen on all network interfaces
 app.listen(port, host, () => {
-  console.log(`Server is running on http://${host}:${port}`);
-  console.log("Accessible depuis d'autres appareils sur le réseau.");
+    console.log(`Server is running on http://${host}:${port}`);
+    console.log("Accessible depuis d'autres appareils sur le réseau.");
 });

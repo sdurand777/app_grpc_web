@@ -9,6 +9,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "stats.js": "^0.17.0",
     "protoc-gen-js": "^3.21.4",
     "three": "^0.172.0"
   },
