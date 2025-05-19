@@ -15,44 +15,26 @@ import time
 
 import collections
 
+# loggin
+import logging
+import os
 
-# def apply_voxel_grid_filter(pointcloud, voxel_size=0.05):
-#     """
-#     Réduit la densité d'un nuage de points en appliquant un filtre de type grille voxel.
-#     :param pointcloud: Objet PointCloud contenant une liste de points avec des attributs x, y, z.
-#     :param voxel_size: Taille du voxel en mètres.
-#     :return: Nouvel objet PointCloud filtré.
-#     """
-#     voxel_dict = collections.defaultdict(list)
-#
-#     # Regrouper les points par voxel
-#     for point in pointcloud.points:
-#         voxel_idx = (
-#             int(point.x / voxel_size),
-#             int(point.y / voxel_size),
-#             int(point.z / voxel_size)
-#         )
-#         voxel_dict[voxel_idx].append(point)
-#
-#     # Calculer le centroïde de chaque voxel
-#     filtered_points = []
-#     for points in voxel_dict.values():
-#         x = sum(p.x for p in points) / len(points)
-#         y = sum(p.y for p in points) / len(points)
-#         z = sum(p.z for p in points) / len(points)
-#         new_point = type(points[0])()  # Crée une nouvelle instance de Point
-#         new_point.x = x
-#         new_point.y = y
-#         new_point.z = z
-#         filtered_points.append(new_point)
-#
-#     # Créer un nouveau PointCloud avec les points filtrés
-#     new_pointcloud = type(pointcloud)()
-#     new_pointcloud.points.extend(filtered_points)
-#     return new_pointcloud
+# Définir le nom du logger avec le nom du fichier
+LOGGER_NAME = os.path.splitext(os.path.basename(__file__))[0]  # 'server_slam'
 
 
-def apply_voxel_grid_filter(pointcloud, voxel_size=0.05):
+DEBUG_CLIENT = False
+DEBUG_LOGS = True  # <--- Active ou désactive les logs debug ici
+
+logger = logging.getLogger(LOGGER_NAME)
+logger.setLevel(logging.DEBUG if DEBUG_LOGS else logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('[%(asctime)s][%(name)s][%(levelname)s] %(message)s')
+handler.setFormatter(formatter)
+logger.handlers = [handler]
+
+
+def apply_voxel_grid_filter(pointcloud, voxel_size=0.01):
     """
     Réduit la densité d'un nuage de points en appliquant un filtre de type grille voxel.
     Pour chaque voxel, le point représentatif est positionné au centroïde des points du voxel,
@@ -111,11 +93,11 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
         self.point_clouds = []  # Stocker les points reçus
         self.point_clouds_with_poses = []
         self.slam_data = []
+        self._send_buffer_points = []
 
     # RPC ConnectPointCloudWithPose service pour recevoir le PCD et la pose du client
     def ConnectSlamData(self, request_iterator, context):
         print("Réception des slam data du client...")
-
 
         for data in request_iterator:
 
@@ -126,81 +108,282 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             indexlist = data.indexlist
 
             #print(f"Reçu une liste de pcds avec {len(pointcloudlist.pointclouds)} pointclouds et {len(pointcloudlist.pointclouds.points)} points.")
-            print(f"Reçu une liste de pcds avec {len(pointcloudlist.pointclouds)} pointclouds")
-            print(f"Reçu une liste de poses avec : {len(poselist.poses)} poses")
-            print(f"Reçu une liste de kfs avec : {len(indexlist.index)} indices")
-            # Afficher la liste d'indices
-            print(f"Liste des indices : {list(indexlist.index)}")
+
+
+            if DEBUG_CLIENT:
+                logger.debug(f"Reçu une liste de pcds avec {len(pointcloudlist.pointclouds)} pointclouds")
+                logger.debug(f"Reçu une liste de poses avec : {len(poselist.poses)} poses")
+                logger.debug(f"Reçu une liste de kfs avec : {len(indexlist.index)} indices")
+                logger.debug(f"Liste des indices : {list(indexlist.index)}")
+
+
+
+            # print(f"Reçu une liste de pcds avec {len(pointcloudlist.pointclouds)} pointclouds")
+            # print(f"Reçu une liste de poses avec : {len(poselist.poses)} poses")
+            # print(f"Reçu une liste de kfs avec : {len(indexlist.index)} indices")
+            # # Afficher la liste d'indices
+            # print(f"Liste des indices : {list(indexlist.index)}")
 
             # Calculer le nombre global de points
             for pointcloud in pointcloudlist.pointclouds:
                 total_points += len(pointcloud.points)  # Ajouter le nombre de points dans chaque PointCloud
-            print(f"Nombre total de points dans ces pointclouds : {total_points}")
+
+            if DEBUG_CLIENT:
+                logger.debug(f"Nombre total de points dans ces pointclouds : {total_points}")
+
+            #print(f"Nombre total de points dans ces pointclouds : {total_points}")
 
             # Stocker le nuage de points et la pose
             self.slam_data.append((pointcloudlist, poselist, indexlist))
 
-        print("--------- fin de réception --------")
+        
+        if DEBUG_CLIENT:
+            logger.debug("--------- fin de réception --------")
+
+        #print("--------- fin de réception --------")
         return Empty()  # Réponse vide pour confirmer
 
 
-    # # RPC GetSlamData pour envoyer les data pcds poses et indices 
     # def GetSlamData(self, request, context):
-    #     print("Envoi des slam data au client ...")
+    #     logger.info("Envoi des slam data au client ...")
     #     try:
-    #         while True:  # Boucle infinie pour envoyer les points et les poses en continu
-    #             # Envoyer les points et poses déjà reçus
+    #         BATCH_SIZE = 10000
+    #         TIMEOUT_EMPTY = 2.0  # Temps d'attente (s) sans nouveau pointcloud avant d'envoyer le dernier batch
+    #         self._send_buffer_points = getattr(self, "_send_buffer_points", [])
+    #         self._send_buffer_poses = getattr(self, "_send_buffer_poses", [])
+    #         self._send_buffer_indices = getattr(self, "_send_buffer_indices", [])
+    #
+    #         last_receive_time = time.time()
+    #
+    #         while True:
+    #             data_received = False
+    #
     #             if self.slam_data:
+    #                 sent_batches = 0
+    #                 total_sent_points = 0
+    #
     #                 for pointcloudlist, poselist, indexlist in self.slam_data:
-    #                     print(f"Envoi liste pcds avec {len(pointcloudlist.pointclouds)} pointclouds.")
-    #                     print(f"Envoi liste poses avec matrice : {len(poselist.poses)}")
-    #                     
-    #                     # Créez l'objet PointCloudWithPose à envoyer
-    #                     yield pointcloud_pb2.SlamData(pointcloudlist=pointcloudlist, poselist=poselist, indexlist=indexlist)
+    #                     filtered_pointclouds = [
+    #                         apply_voxel_grid_filter(pc, voxel_size=0.01) for pc in pointcloudlist.pointclouds
+    #                     ]
+    #                     latest_pose = poselist.poses[-1] if poselist.poses else None
+    #                     latest_index = indexlist.index[-1] if indexlist.index else None
     #
-    #                 print("Nettoyage des données déjà envoyées...")
-    #                 # Supprimer les données envoyées
+    #                     for pc in filtered_pointclouds:
+    #                         for point in pc.points:
+    #                             self._send_buffer_points.append(point)
+    #                             if latest_pose:
+    #                                 self._send_buffer_poses.append(latest_pose)
+    #                             if latest_index is not None:
+    #                                 self._send_buffer_indices.append(latest_index)
+    #
+    #                             # Dès qu'on atteint le seuil, on envoie
+    #                             while len(self._send_buffer_points) >= BATCH_SIZE:
+    #                                 batch_pointcloud = pointcloud_pb2.PointCloud()
+    #                                 batch_pointcloud.points.extend(self._send_buffer_points[:BATCH_SIZE])
+    #
+    #                                 batch_pointcloudlist = pointcloud_pb2.PointCloudList()
+    #                                 batch_pointcloudlist.pointclouds.append(batch_pointcloud)
+    #
+    #                                 batch_poselist = pointcloud_pb2.PoseList()
+    #                                 if self._send_buffer_poses:
+    #                                     batch_poselist.poses.append(self._send_buffer_poses[0])
+    #
+    #                                 batch_indexlist = pointcloud_pb2.Index()
+    #                                 if self._send_buffer_indices:
+    #                                     batch_indexlist.index.append(self._send_buffer_indices[0])
+    #
+    #                                 if DEBUG_LOGS:
+    #                                     logger.debug(f"Envoi d'un batch de {BATCH_SIZE} points au client.")
+    #
+    #                                 yield pointcloud_pb2.SlamData(
+    #                                     pointcloudlist=batch_pointcloudlist,
+    #                                     poselist=batch_poselist,
+    #                                     indexlist=batch_indexlist
+    #                                 )
+    #                                 sent_batches += 1
+    #                                 total_sent_points += BATCH_SIZE
+    #
+    #                                 # On retire les points déjà envoyés
+    #                                 self._send_buffer_points = self._send_buffer_points[BATCH_SIZE:]
+    #                                 self._send_buffer_poses = self._send_buffer_poses[BATCH_SIZE:]
+    #                                 self._send_buffer_indices = self._send_buffer_indices[BATCH_SIZE:]
+    #
+    #                                 last_receive_time = time.time()
+    #                                 data_received = True
+    #
     #                 self.slam_data = []
-    #
-    #                 # Vous pouvez aussi ajouter un petit délai entre les envois pour éviter de trop solliciter le réseau
-    #                 time.sleep(0.1)
+    #                 if sent_batches > 0:
+    #                     logger.info(f"Total envoyé : {total_sent_points} points en {sent_batches} batchs.")
     #             else:
-    #                 # Attendre un peu avant de vérifier s'il y a de nouveaux points et poses
-    #                 print("En attente de nouveaux points et poses...")
-    #                 time.sleep(0.1)
+    #                 # Si on n'a pas reçu de nouvelle donnée depuis TIMEOUT_EMPTY et qu'il reste un buffer incomplet, alors on l'envoie !
+    #                 if self._send_buffer_points and (time.time() - last_receive_time > TIMEOUT_EMPTY):
+    #                     last_count = len(self._send_buffer_points)
+    #                     batch_pointcloud = pointcloud_pb2.PointCloud()
+    #                     batch_pointcloud.points.extend(self._send_buffer_points)
+    #
+    #                     batch_pointcloudlist = pointcloud_pb2.PointCloudList()
+    #                     batch_pointcloudlist.pointclouds.append(batch_pointcloud)
+    #
+    #                     batch_poselist = pointcloud_pb2.PoseList()
+    #                     if self._send_buffer_poses:
+    #                         batch_poselist.poses.append(self._send_buffer_poses[0])
+    #
+    #                     batch_indexlist = pointcloud_pb2.Index()
+    #                     if self._send_buffer_indices:
+    #                         batch_indexlist.index.append(self._send_buffer_indices[0])
+    #
+    #                     if DEBUG_LOGS:
+    #                         logger.debug(f"Envoi du dernier batch de {last_count} points au client (timeout ou fin de stream).")
+    #                     yield pointcloud_pb2.SlamData(
+    #                         pointcloudlist=batch_pointcloudlist,
+    #                         poselist=batch_poselist,
+    #                         indexlist=batch_indexlist
+    #                     )
+    #
+    #                     last_receive_time = time.time()
+    #                     data_received = True
+    #
+    #                     logger.info(f"Total envoyé : {last_count} points en 1 batch (incomplet).")
+    #                     self._send_buffer_points = []
+    #                     self._send_buffer_poses = []
+    #                     self._send_buffer_indices = []
+    #                 # Sleep plus court pour la réactivité
+    #                 time.sleep(0.05)
     #     except grpc.RpcError as e:
-    #         print(f"Erreur RPC : {e.code()}, message : {e.details()}")
+    #         logger.error(f"Erreur RPC : {e.code()}, message : {e.details()}")
     #         context.set_code(grpc.StatusCode.INTERNAL)
     #         context.set_details("Erreur lors de l'envoi des points et poses.")
 
 
-    def GetSlamData(self, request, context):
-        print("Envoi des slam data au client ...")
-        try:
-            while True:
-                if self.slam_data:
-                    for pointcloudlist, poselist, indexlist in self.slam_data:
-                        # Appliquer le filtrage spatial à chaque nuage de points
-                        filtered_pointclouds = [
-                            apply_voxel_grid_filter(pc, voxel_size=0.05) for pc in pointcloudlist.pointclouds
-                        ]
-                        # Créer un nouvel objet PointCloudList avec les nuages filtrés
-                        filtered_pointcloudlist = type(pointcloudlist)()
-                        filtered_pointcloudlist.pointclouds.extend(filtered_pointclouds)
 
-                        yield pointcloud_pb2.SlamData(
-                            pointcloudlist=filtered_pointcloudlist,
-                            poselist=poselist,
-                            indexlist=indexlist
-                        )
+
+    def GetSlamData(self, request, context):
+        logger.info("Envoi des slam data au client ...")
+        try:
+            BATCH_SIZE = 100000
+            TIMEOUT_EMPTY = 2.0  # Temps d'attente (s) sans nouveau pointcloud avant d'envoyer le dernier batch
+            self._send_buffer_points = getattr(self, "_send_buffer_points", [])
+            self._send_buffer_poses = getattr(self, "_send_buffer_poses", [])
+            self._send_buffer_indices = getattr(self, "_send_buffer_indices", [])
+
+            last_receive_time = time.time()
+
+            while True:
+                data_received = False
+
+                if self.slam_data:
+                    sent_batches = 0
+                    total_sent_points = 0
+
+                    for pointcloudlist, poselist, indexlist in self.slam_data:
+
+                        filtered_pointclouds = [
+                            apply_voxel_grid_filter(pc, voxel_size=0.02) for pc in pointcloudlist.pointclouds
+                        ]
+                        latest_pose = poselist.poses[-1] if poselist.poses else None
+                        latest_index = indexlist.index[-1] if indexlist.index else None
+
+                        # On insère tous les points dans le buffer SANS filtrer
+                        #for pc in pointcloudlist.pointclouds:
+                        for pc in filtered_pointclouds:
+
+                            for point in pc.points:
+                                self._send_buffer_points.append(point)
+                                if latest_pose:
+                                    self._send_buffer_poses.append(latest_pose)
+                                if latest_index is not None:
+                                    self._send_buffer_indices.append(latest_index)
+
+
+                            # Dès qu'on atteint le seuil, on envoie (filtré)
+                            while len(self._send_buffer_points) >= BATCH_SIZE:
+                                # ----- FILTRAGE SUR LE BATCH COMPLET -----
+                                # Création d'un PointCloud temporaire pour appliquer le filtre
+                                batch_pointcloud = pointcloud_pb2.PointCloud()
+                                batch_pointcloud.points.extend(self._send_buffer_points[:BATCH_SIZE])
+
+                                # Filtrage du batch complet (on suppose que apply_voxel_grid_filter attend un PointCloud)
+                                batch_pointcloud_filtered = apply_voxel_grid_filter(batch_pointcloud, voxel_size=0.02)
+                                # Si le filtre retourne un PointCloudList, adapte en conséquence
+                                # (ex: batch_pointcloud_filtered = apply_voxel_grid_filter([batch_pointcloud], voxel_size=0.01)[0])
+
+                                # Création des structures à envoyer
+                                batch_pointcloudlist = pointcloud_pb2.PointCloudList()
+                                batch_pointcloudlist.pointclouds.append(batch_pointcloud_filtered)
+
+                                batch_poselist = pointcloud_pb2.PoseList()
+                                if self._send_buffer_poses:
+                                    batch_poselist.poses.append(self._send_buffer_poses[0])
+
+                                batch_indexlist = pointcloud_pb2.Index()
+                                if self._send_buffer_indices:
+                                    batch_indexlist.index.append(self._send_buffer_indices[0])
+
+                                if DEBUG_LOGS:
+                                    logger.debug(f"Envoi d'un batch de {BATCH_SIZE} points (filtré) au client.")
+
+                                yield pointcloud_pb2.SlamData(
+                                    pointcloudlist=batch_pointcloudlist,
+                                    poselist=batch_poselist,
+                                    indexlist=batch_indexlist
+                                )
+                                sent_batches += 1
+                                total_sent_points += BATCH_SIZE
+
+                                # On retire les points déjà envoyés
+                                self._send_buffer_points = self._send_buffer_points[BATCH_SIZE:]
+                                self._send_buffer_poses = self._send_buffer_poses[BATCH_SIZE:]
+                                self._send_buffer_indices = self._send_buffer_indices[BATCH_SIZE:]
+
+                                last_receive_time = time.time()
+                                data_received = True
+
                     self.slam_data = []
-                    time.sleep(0.1)
+                    if sent_batches > 0:
+                        logger.info(f"Total envoyé : {total_sent_points} points en {sent_batches} batchs.")
                 else:
-                    time.sleep(0.1)
+                    # Si on n'a pas reçu de nouvelle donnée depuis TIMEOUT_EMPTY et qu'il reste un buffer incomplet, alors on l'envoie !
+                    if self._send_buffer_points and (time.time() - last_receive_time > TIMEOUT_EMPTY):
+                        last_count = len(self._send_buffer_points)
+                        batch_pointcloud = pointcloud_pb2.PointCloud()
+                        batch_pointcloud.points.extend(self._send_buffer_points)
+
+                        batch_pointcloudlist = pointcloud_pb2.PointCloudList()
+                        batch_pointcloudlist.pointclouds.append(batch_pointcloud)
+
+                        batch_poselist = pointcloud_pb2.PoseList()
+                        if self._send_buffer_poses:
+                            batch_poselist.poses.append(self._send_buffer_poses[0])
+
+                        batch_indexlist = pointcloud_pb2.Index()
+                        if self._send_buffer_indices:
+                            batch_indexlist.index.append(self._send_buffer_indices[0])
+
+                        if DEBUG_LOGS:
+                            logger.debug(f"Envoi du dernier batch de {last_count} points au client (timeout ou fin de stream).")
+                        yield pointcloud_pb2.SlamData(
+                            pointcloudlist=batch_pointcloudlist,
+                            poselist=batch_poselist,
+                            indexlist=batch_indexlist
+                        )
+
+                        last_receive_time = time.time()
+                        data_received = True
+
+                        logger.info(f"Total envoyé : {last_count} points en 1 batch (incomplet).")
+                        self._send_buffer_points = []
+                        self._send_buffer_poses = []
+                        self._send_buffer_indices = []
+                    # Sleep plus court pour la réactivité
+                    time.sleep(0.05)
         except grpc.RpcError as e:
-            print(f"Erreur RPC : {e.code()}, message : {e.details()}")
+            logger.error(f"Erreur RPC : {e.code()}, message : {e.details()}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Erreur lors de l'envoi des points et poses.")
+
+
+
 
 # definition du serveur
 def serve():
