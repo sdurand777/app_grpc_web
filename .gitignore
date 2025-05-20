@@ -6,6 +6,10 @@ node_modules/
 __pycache__/
 *.py[cod]
 
+# fichier loyurds
+*.glb
+*.gltf
+
 # Ignorer les fichiers de log
 *.log
 npm-debug.log*

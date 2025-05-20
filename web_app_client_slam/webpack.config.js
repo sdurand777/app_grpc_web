@@ -3,7 +3,9 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
-  entry: './src/client_opti.js', // Point d'entrée
+  //entry: './src/client_test.js', // Point d'entrée
+  //entry: './src/client_opti.js', // Point d'entrée
+  entry: './src/camera.js', // Point d'entrée
   output: {
     filename: 'bundle.js', // Nom du fichier de sortie
     path: path.resolve(__dirname, 'public/dist'), // Dossier de sortie
@@ -12,7 +14,8 @@ module.exports = {
   mode: 'development', // Mode développement
   devServer: {
     static: {
-      directory: path.join(__dirname, 'dist'), // Dossier pour les fichiers statiques
+      //directory: path.join(__dirname, 'dist'), // Dossier pour les fichiers statiques
+      directory: path.join(__dirname, 'public'), // Dossier pour les fichiers statiques
     },
     port: 9000, // Port du serveur
     open: true, // Ouvrir automatiquement le navigateur

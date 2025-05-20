@@ -6,22 +6,146 @@ import Stats from 'stats.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+
+// JS : export du nuage de points et de la trajectoire
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+
+
+
+// Création et style du bouton d'export
+const saveBtn = document.createElement('button');
+saveBtn.textContent = 'Exporter nuage + trajectoire (.glb)';
+Object.assign(saveBtn.style, {
+position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)',
+padding: '8px 16px', backgroundColor: '#007bff', color: '#fff', border: 'none',
+borderRadius: '4px', cursor: 'pointer', zIndex: '1000'
+});
+document.body.appendChild(saveBtn);
+
+saveBtn.addEventListener('click', () => {
+const exporter = new GLTFExporter();
+exporter.parse(
+  [ pointsMesh, trajectoryLine ],
+  // onCompleted -> result est ArrayBuffer (binaire .glb)
+  (result) => {
+    if (result instanceof ArrayBuffer) {
+      saveArrayBuffer(result, 'scene.glb');
+    } else {
+      console.error('GLTFExporter a renvoyé un JSON inattendu en mode binaire');
+    }
+  },
+  // onError
+  (error) => {
+    console.error('Erreur pendant l\'export GLB:', error);
+  },
+  // options : binaire GLB (avec .glb)
+  {
+    binary: true,
+    onlyVisible: false,
+    truncateDrawRange: false
+  }
+);
+});
+
+// Fonctions utilitaires de téléchargement
+function saveArrayBuffer(buffer, filename) {
+const blob = new Blob([buffer], { type: 'application/octet-stream' });
+const link = document.createElement('a');
+link.style.display = 'none';
+document.body.appendChild(link);
+link.href = URL.createObjectURL(blob);
+link.download = filename;
+link.click();
+setTimeout(() => {
+  URL.revokeObjectURL(link.href);
+  document.body.removeChild(link);
+}, 100);
+}
+
+// // --- Bouton d'export ---
+// const saveBtn = document.createElement('button');
+// saveBtn.textContent = 'Enregistrer nuage + trajectoire';
+// Object.assign(saveBtn.style, {
+// position: 'absolute',
+// top: '10px',
+// left: '50%',
+// transform: 'translateX(-50%)',
+// padding: '8px 16px',
+// backgroundColor: '#007bff',
+// color: '#fff',
+// border: 'none',
+// borderRadius: '4px',
+// cursor: 'pointer',
+// zIndex: '1000'
+// });
+// document.body.appendChild(saveBtn);
+//
+// saveBtn.addEventListener('click', () => {
+// const exporter = new GLTFExporter();
+// exporter.parse(
+//   // Exporte spécifiquement vos variables
+//   [ pointsMesh, trajectoryLine ],
+//   (result) => {
+//     if (result instanceof ArrayBuffer) {
+//       saveArrayBuffer(result, 'scene.glb');
+//     } else {
+//       saveString(JSON.stringify(result, null, 2), 'scene.gltf');
+//     }
+//   },
+//   { binary: true, onlyVisible: false, truncateDrawRange: false }
+// );
+// });
+//
+// // Fonctions utilitaires
+// function saveString(text, filename) {
+// save(new Blob([text], { type: 'text/plain' }), filename);
+// }
+//
+// function saveArrayBuffer(buffer, filename) {
+// save(new Blob([buffer], { type: 'application/octet-stream' }), filename);
+// }
+//
+// function save(blob, filename) {
+// const link = document.createElement('a');
+// link.style.display = 'none';
+// document.body.appendChild(link);
+// link.href = URL.createObjectURL(blob);
+// link.download = filename;
+// link.click();
+// setTimeout(() => {
+//   URL.revokeObjectURL(link.href);
+//   document.body.removeChild(link);
+// }, 100);
+// }
+
+
+
 // ==== THREE.JS SCÈNE, CAMÉRA, RENDERER ====
 const scene = new THREE.Scene();
 
-//const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+// 1. Renderer avec profondeur logarithmique
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  logarithmicDepthBuffer: true    // → beaucoup plus de précision sur de grands rapports near/far
+});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
-
+// 2. Caméra “ultra-précise”
+const fov    = 50;                     // angle de vue confortable
+const aspect = window.innerWidth / window.innerHeight;
+const near  = 0.0001;                  // 0.1 mm
+const far   = 1000;                    // 1 km
+const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
 
 // repere de la camera
 const cameraOrientationHelper = new THREE.AxesHelper(0.7); // adapte la taille si besoin
 cameraOrientationHelper.position.set(0, 0, 0); // centre
 scene.add(cameraOrientationHelper);
 
-// const cameraHelper = new THREE.CameraHelper(camera);
-// scene.add(cameraHelper);
-
+// (Optionnel) jouer sur le zoom de la caméra pour un contrôle plus fin
+camera.zoom = 1;                       
+camera.updateProjectionMatrix();
 
 // ========== BOUTON RESET VIEW (ajouté dynamiquement) ==========
 const resetBtn = document.createElement('button');
@@ -78,11 +202,6 @@ resetBtn.onclick = function resetView() {
 
 
 
-
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(new THREE.Color("lightblue"));
-document.body.appendChild(renderer.domElement);
 
 
 // Juste après : const renderer = new THREE.WebGLRenderer();
@@ -159,7 +278,36 @@ camera.lookAt(0, 0, 0);
 // axesHelper.quaternion.copy(camera.quaternion); // pour matcher l’orientation de la caméra
 // scene.add(axesHelper);
 
+//const controls = new OrbitControls(camera, renderer.domElement);
+// 3. Contrôles avec distances mini/maxi adaptées
 const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping   = true;
+controls.dampingFactor   = 0.1;
+controls.enablePan       = true;
+controls.enableZoom      = true;
+controls.zoomSpeed       = 3;         // accélère le “dolly in/out”
+controls.minDistance     = 0.01;      // 1 cm
+controls.maxDistance     = 100;       // 100 m
+
+
+
+// 4. Recalcul dynamique de near/far sur chaque interaction
+const buffer      = 1.2;
+const minNear     = 0.0001; // même 0.1 mm si besoin
+
+function updateNearFar() {
+  const box    = new THREE.Box3().setFromObject(scene);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const d      = camera.position.distanceTo(sphere.center);
+
+  camera.near = Math.max(minNear, d - sphere.radius * buffer);
+  camera.far  =        d + sphere.radius * buffer;
+  camera.updateProjectionMatrix();
+}
+
+controls.addEventListener('change', updateNearFar);
+
+
 
 // controls.target.set(0, 0, -5);
 // controls.update();
@@ -202,11 +350,11 @@ function computeCenter(positions, count) {
 }
 
 
-setInterval(() => {
-    const center = computeCenter(positions, displayCount);
-    controls.target.copy(center);
-    controls.update();
-}, 500);
+// setInterval(() => {
+//     const center = computeCenter(positions, displayCount);
+//     controls.target.copy(center);
+//     controls.update();
+// }, 500);
 
 
 const workerScript = `
@@ -501,12 +649,12 @@ let lastGPUName = "";
 let currentGPUInfo = "GPU: inconnu";
 
 
-function updateNearFar() {
-  const dist = camera.position.distanceTo(controls.target);
-  camera.near = Math.max(0.1, dist * 0.001);      // exemple : near = 0.1% de la distance
-  camera.far  = dist * 10;                        // far = 10x la distance
-  camera.updateProjectionMatrix();
-}
+// function updateNearFar() {
+//   const dist = camera.position.distanceTo(controls.target);
+//   camera.near = Math.max(0.1, dist * 0.001);      // exemple : near = 0.1% de la distance
+//   camera.far  = dist * 10;                        // far = 10x la distance
+//   camera.updateProjectionMatrix();
+// }
 
 
 function animate(time) {
@@ -544,8 +692,8 @@ function animate(time) {
         `${currentGPUInfo}`;
 
 
-    // Appelle cette fonction à chaque changement de caméra ou dans ta boucle d’animation :
-    updateNearFar();
+    // // Appelle cette fonction à chaque changement de caméra ou dans ta boucle d’animation :
+    // updateNearFar();
 
 
     stats.end();
