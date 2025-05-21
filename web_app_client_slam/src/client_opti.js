@@ -19,16 +19,12 @@ const cameraOrientationHelper = new THREE.AxesHelper(0.7); // adapte la taille s
 cameraOrientationHelper.position.set(0, 0, 0); // centre
 scene.add(cameraOrientationHelper);
 
-// const cameraHelper = new THREE.CameraHelper(camera);
-// scene.add(cameraHelper);
-
-
 // ========== BOUTON RESET VIEW (ajouté dynamiquement) ==========
 const resetBtn = document.createElement('button');
 resetBtn.id = 'resetViewBtn';
 resetBtn.textContent = 'Reset View';
 resetBtn.style.position = 'absolute';
-resetBtn.style.top = '10px';
+resetBtn.style.top = '30px';
 resetBtn.style.right = '10px';
 resetBtn.style.zIndex = '20';
 resetBtn.style.fontSize = '1.1em';
@@ -75,15 +71,36 @@ resetBtn.onclick = function resetView() {
 // ===============================================================
 
 
+// ==== BOUTON TOGGLE TRAJECTOIRE EN JS PUR ====
+const toggleBtn = document.createElement('button');
+toggleBtn.id = 'toggleTrajectoryBtn';
+toggleBtn.textContent = 'Masquer la trajectoire';
+Object.assign(toggleBtn.style, {
+  position: 'absolute',
+  top: '60px',
+  right: '10px',
+  zIndex: 10,
+  padding: '6px 12px',
+  fontSize: '14px',
+  cursor: 'pointer'
+});
+document.body.appendChild(toggleBtn);
 
-
+let trajectoryVisible = true;
+toggleBtn.addEventListener('click', () => {
+  trajectoryVisible = !trajectoryVisible;
+  trajectoryLine.visible = trajectoryVisible;
+  sphereMarkers.forEach(s => s.visible = trajectoryVisible);
+  toggleBtn.textContent = trajectoryVisible
+    ? 'Masquer la trajectoire'
+    : 'Afficher la trajectoire';
+});
 
 
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(new THREE.Color("lightblue"));
 document.body.appendChild(renderer.domElement);
-
 
 // Juste après : const renderer = new THREE.WebGLRenderer();
 (function checkGPU() {
@@ -125,6 +142,10 @@ document.body.appendChild(renderer.domElement);
 
 
 
+
+
+
+
 // ==== STATS ====
 const stats = new Stats();
 stats.showPanel(0);
@@ -143,26 +164,10 @@ pointCountDiv.style.fontFamily = 'monospace';
 pointCountDiv.style.zIndex = 1001;
 document.body.appendChild(pointCountDiv);
 
-
 camera.position.z = 10;
 camera.lookAt(0, 0, 0);
 
-// setInterval(() => {
-//     const d = camera.position.distanceTo(controls.target);
-//     console.log('Camera → Target distance:', d.toFixed(4));
-// }, 500);
-
-
-// // show the new orientation
-// const axesHelper = new THREE.AxesHelper(0.7); // ou la taille que tu veux
-// axesHelper.position.set(3, 3, 3);
-// axesHelper.quaternion.copy(camera.quaternion); // pour matcher l’orientation de la caméra
-// scene.add(axesHelper);
-
 const controls = new OrbitControls(camera, renderer.domElement);
-
-// controls.target.set(0, 0, -5);
-// controls.update();
 
 // ==== BUFFER PRÉ-ALLOUÉ POUR LE POINT CLOUD ====
 const MAX_POINTS = 20000000;
@@ -181,32 +186,115 @@ pointsGeometry.setAttribute('color', colorAttr);
 
 const pointsMaterial = new THREE.PointsMaterial({ size: 0.01, vertexColors: true });
 const pointsMesh = new THREE.Points(pointsGeometry, pointsMaterial);
+pointsMesh.frustumCulled = false;
 scene.add(pointsMesh);
 
 let pointCount = 0;
 
+// 1. Constantes de sampling
+const PICK_RATIO     = 0.01;    // 1 % des points
+const MAX_PICK_POINTS = 200000; // plafond pour ne pas trop grossir
 
-function computeCenter(positions, count) {
-    let cx = 0, cy = 0, cz = 0;
-    for (let i = 0; i < count; i++) {
-        cx += positions[i*3];
-        cy += positions[i*3+1];
-        cz += positions[i*3+2];
+// 2. Structures pour le pick-mesh
+const pickPositions      = [];  // tableau JS de floats
+const pickOriginalIndices = []; // index dans le buffer principal
+
+// 3. Création du pick-mesh (jamais ajouté à la scène, ou invisible)
+const pickGeometry = new THREE.BufferGeometry();
+pickGeometry.setAttribute(
+  'position',
+  new THREE.Float32BufferAttribute([], 3)
+);
+const pickMaterial = new THREE.PointsMaterial({ size: 0.01, visible: false });
+const pickMesh     = new THREE.Points(pickGeometry, pickMaterial);
+
+
+
+function enablePointDistanceMeasurement(getFullMesh, pickMesh, scene, camera, renderer) {
+  const raycaster = new THREE.Raycaster();
+  raycaster.params.Points.threshold = 0.1;
+  const mouse   = new THREE.Vector2();
+  const pts     = [];
+  const markers = [];
+  let line, label;
+
+  function cleanup() {
+    pts.length = 0;
+    if (line)  scene.remove(line);
+    if (label) document.body.removeChild(label);
+    markers.forEach(m => scene.remove(m));
+    markers.length = 0;
+  }
+
+  function onClick(e) {
+    if (!e.ctrlKey) return;
+    e.preventDefault(); e.stopPropagation();
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    // 1️⃣ on intersecte le pickMesh
+    const hits = raycaster.intersectObject(pickMesh, true);
+    if (hits.length === 0) return;
+    if (pts.length >= 2) cleanup();
+
+    const hit     = hits[0];
+    const pickIdx = hit.index;                  // index dans pickPositions
+    const realIdx = pickOriginalIndices[pickIdx]; // index dans le buffer complet
+
+    // 2️⃣ on recalcule la vraie position du buffer complet
+    const posAttr = getFullMesh().geometry.attributes.position;
+    const p       = new THREE.Vector3().fromBufferAttribute(posAttr, realIdx);
+    pts.push(p);
+
+    // 3️⃣ création du marqueur
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(0.05,16,16),
+      new THREE.MeshBasicMaterial({ color:0xffa500, wireframe:true })
+    );
+    m.position.copy(p);
+    m.frustumCulled = false;
+    scene.add(m);
+    markers.push(m);
+
+    if (pts.length === 2) {
+      // tracé de la ligne épaisse
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat  = new THREE.LineBasicMaterial({ color:0xff0000, linewidth:5 });
+      line = new THREE.Line(geom, mat);
+      line.frustumCulled = false;
+      scene.add(line);
+
+      // affichage de la distance
+      const d   = pts[0].distanceTo(pts[1]);
+      const mid = pts[0].clone().add(pts[1]).multiplyScalar(0.5);
+      label = document.createElement('div');
+      Object.assign(label.style, {
+        position:'absolute', padding:'4px 8px', background:'rgba(0,0,0,0.7)',
+        color:'#fff', borderRadius:'4px', fontSize:'12px', pointerEvents:'none'
+      });
+      label.innerText = d.toFixed(3);
+      document.body.appendChild(label);
+      const proj = mid.project(camera);
+      label.style.left = `${(proj.x*0.5+0.5)*window.innerWidth}px`;
+      label.style.top  = `${(-proj.y*0.5+0.5)*window.innerHeight}px`;
     }
-    if (count > 0) {
-        cx /= count;
-        cy /= count;
-        cz /= count;
-    }
-    return new THREE.Vector3(cx, cy, cz);
+  }
+
+  renderer.domElement.addEventListener('click', onClick);
 }
 
-
-setInterval(() => {
-    const center = computeCenter(positions, displayCount);
-    controls.target.copy(center);
-    controls.update();
-}, 500);
+// appel unique, une fois tout est géré en interne
+enablePointDistanceMeasurement(
+  () => pointsMesh,
+  pickMesh,
+  scene,
+  camera,
+  renderer
+);
 
 
 const workerScript = `
@@ -260,8 +348,6 @@ self.onmessage = function (event) {
 };
 `;
 
-
-
 // Création du worker à partir d'un blob
 const workerBlob = new Blob([workerScript], { type: "application/javascript" });
 const worker = new Worker(URL.createObjectURL(workerBlob));
@@ -271,13 +357,12 @@ const MAX_DISPLAY_POINTS = 20000000;
 let writeIndex = 0;
 let displayCount = 0;
 
-
-
 const cameraTrajectory = [];
 //const trajectoryMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff }); // cyan
 const trajectoryMaterial = new THREE.LineBasicMaterial({ color: 0x000080 }); // bleu marine
 const trajectoryGeometry = new THREE.BufferGeometry();
 let trajectoryLine = new THREE.Line(trajectoryGeometry, trajectoryMaterial);
+trajectoryLine.frustumCulled = false;
 scene.add(trajectoryLine);
 
 const sphereMarkers = [];
@@ -314,6 +399,31 @@ worker.onmessage = function (event) {
     colorAttr.updateRange.offset = writeIndex * 3;
     colorAttr.updateRange.count = newPoints * 3;
     colorAttr.needsUpdate = true;
+    //pointsGeometry.computeBoundingSphere();
+
+    for (let i = 0; i < newPoints; i++) {
+        const globalIdx = writeIndex + i;
+        // si on dépasse déjà le max, on sort
+        if (pickOriginalIndices.length >= MAX_PICK_POINTS) break;
+        // tirage au sort
+        if (Math.random() < PICK_RATIO) {
+            // on pompe la coord du buffer (coords = Float32Array batch)
+            pickPositions.push(
+                coords[i*3], coords[i*3+1], coords[i*3+2]
+            );
+            pickOriginalIndices.push(globalIdx);
+        }
+    }
+
+    // 4.b. Mise à jour du pickGeometry
+    pickGeometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(pickPositions, 3)
+    );
+    pickGeometry.setDrawRange(0, pickPositions.length / 3);
+    pickGeometry.computeBoundingSphere();
+    pickGeometry.attributes.position.needsUpdate = true;
+
 
     writeIndex += newPoints;
     displayCount = writeIndex;
@@ -321,13 +431,6 @@ worker.onmessage = function (event) {
 
     // === LOG DE LA MATRICE DE LA DERNIÈRE POSE ===
     if (poseMatrix && poseMatrix.length === 16) {
-        // console.log(
-        //     "Dernière pose reçue du worker (matrice 4x4):\n" +
-        //     poseMatrix.slice(0, 4).map(v => v.toFixed(3)).join(' ') + '\n' +
-        //     poseMatrix.slice(4, 8).map(v => v.toFixed(3)).join(' ') + '\n' +
-        //     poseMatrix.slice(8, 12).map(v => v.toFixed(3)).join(' ') + '\n' +
-        //     poseMatrix.slice(12, 16).map(v => v.toFixed(3)).join(' ')
-        // );
         applyPoseToMesh(cameraMesh, poseMatrix);
 
         // Extraire la position caméra
@@ -336,27 +439,6 @@ worker.onmessage = function (event) {
         const poseMat = new THREE.Matrix4().fromArray(poseMatrixColMajor);
         const position = new THREE.Vector3();
         position.setFromMatrixPosition(poseMat);
-
-
-        // === MISE À JOUR DE LA CAMÉRA THREE.JS AVEC LA POSE ===
-        // vision subjective
-        // if (camera) {
-        //     // 1. Extraire position
-        //     const newPos = new THREE.Vector3();
-        //     newPos.setFromMatrixPosition(poseMat);
-        //
-        //     // 2. Extraire orientation (quaternion)
-        //     const newQuat = new THREE.Quaternion();
-        //     poseMat.decompose(newPos, newQuat, new THREE.Vector3());
-        //
-        //     // 3. Appliquer position & rotation à la caméra
-        //     camera.position.copy(newPos);
-        //     camera.quaternion.copy(newQuat);
-        //
-        //     // 4. (Optionnel) S'assurer que la matrice est bien prise en compte
-        //     camera.updateMatrixWorld(true);
-        // }
-
 
         // Stocker la position et mettre à jour la trajectoire
         if (cameraTrajectory.length === 0 || !cameraTrajectory[cameraTrajectory.length-1].equals(position)) {
@@ -370,7 +452,9 @@ worker.onmessage = function (event) {
 
             // Ajoute la sphère rouge
             const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.frustumCulled = false;
             sphere.position.copy(position);
+            sphere.visible = trajectoryVisible;   // <-- respecte l’état du bouton
             scene.add(sphere);
             sphereMarkers.push(sphere);
         }
@@ -378,8 +462,6 @@ worker.onmessage = function (event) {
     }
 
 };
-
-
 
 
 const CAM_POINTS = [
@@ -451,7 +533,6 @@ function applyPoseToMesh(mesh, poseMatrix) {
 const cameraMesh = createCameraMesh(0.1);
 scene.add(cameraMesh);
 
-
 // ==== GRPC-WEB - RÉCEPTION DES POINTS ====
 const client = new SlamServiceClient('http://192.168.51.30:8080', null, null);
 const request = new Empty();
@@ -471,14 +552,6 @@ setInterval(() => {
 }, 1000);
 
 
-// setInterval(() => {
-//     camera.near = 0.01;
-//     camera.far = 10000;
-//     camera.updateProjectionMatrix();
-//
-// }, 500); // toutes les 500ms
-
-
 stream.on('data', (response) => {
     // On sérialise le message gRPC en JS pur pour le worker
     worker.postMessage({ type: 'grpc_points', payload: response.toObject() });
@@ -495,11 +568,9 @@ stream.on('end', () => {
 
 // ==== BOUCLE DE RENDU (~30 FPS) ====
 let lastRenderTime = 0;
-
 let lastGPUCheck = 0;
 let lastGPUName = "";
 let currentGPUInfo = "GPU: inconnu";
-
 
 function updateNearFar() {
   const dist = camera.position.distanceTo(controls.target);
@@ -520,7 +591,6 @@ function animate(time) {
 
     controls.update();
     renderer.render(scene, camera);
-
 
     // ---- GPU CHECK À CHAQUE FRAME ----
     try {
@@ -543,9 +613,8 @@ function animate(time) {
         `Fréquence stream : ${packetsPerSecond} paquets/s\n` +
         `${currentGPUInfo}`;
 
-
     // Appelle cette fonction à chaque changement de caméra ou dans ta boucle d’animation :
-    updateNearFar();
+    //updateNearFar();
 
 
     stats.end();

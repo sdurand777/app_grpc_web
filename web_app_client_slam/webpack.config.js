@@ -5,7 +5,8 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 module.exports = {
   //entry: './src/client_test.js', // Point d'entrée
   //entry: './src/client_opti.js', // Point d'entrée
-  entry: './src/camera.js', // Point d'entrée
+  //entry: './src/camera.js', // Point d'entrée
+  entry: './src/index.js', // Point d'entrée
   output: {
     filename: 'bundle.js', // Nom du fichier de sortie
     path: path.resolve(__dirname, 'public/dist'), // Dossier de sortie

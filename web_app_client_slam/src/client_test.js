@@ -62,63 +62,6 @@ setTimeout(() => {
 }, 100);
 }
 
-// // --- Bouton d'export ---
-// const saveBtn = document.createElement('button');
-// saveBtn.textContent = 'Enregistrer nuage + trajectoire';
-// Object.assign(saveBtn.style, {
-// position: 'absolute',
-// top: '10px',
-// left: '50%',
-// transform: 'translateX(-50%)',
-// padding: '8px 16px',
-// backgroundColor: '#007bff',
-// color: '#fff',
-// border: 'none',
-// borderRadius: '4px',
-// cursor: 'pointer',
-// zIndex: '1000'
-// });
-// document.body.appendChild(saveBtn);
-//
-// saveBtn.addEventListener('click', () => {
-// const exporter = new GLTFExporter();
-// exporter.parse(
-//   // Exporte spécifiquement vos variables
-//   [ pointsMesh, trajectoryLine ],
-//   (result) => {
-//     if (result instanceof ArrayBuffer) {
-//       saveArrayBuffer(result, 'scene.glb');
-//     } else {
-//       saveString(JSON.stringify(result, null, 2), 'scene.gltf');
-//     }
-//   },
-//   { binary: true, onlyVisible: false, truncateDrawRange: false }
-// );
-// });
-//
-// // Fonctions utilitaires
-// function saveString(text, filename) {
-// save(new Blob([text], { type: 'text/plain' }), filename);
-// }
-//
-// function saveArrayBuffer(buffer, filename) {
-// save(new Blob([buffer], { type: 'application/octet-stream' }), filename);
-// }
-//
-// function save(blob, filename) {
-// const link = document.createElement('a');
-// link.style.display = 'none';
-// document.body.appendChild(link);
-// link.href = URL.createObjectURL(blob);
-// link.download = filename;
-// link.click();
-// setTimeout(() => {
-//   URL.revokeObjectURL(link.href);
-//   document.body.removeChild(link);
-// }, 100);
-// }
-
-
 
 // ==== THREE.JS SCÈNE, CAMÉRA, RENDERER ====
 const scene = new THREE.Scene();
