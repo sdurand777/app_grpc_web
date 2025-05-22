@@ -3,6 +3,8 @@ import { createScene, createCamera, createRenderer, createControls, createStats 
 import { SlamService } from './SlamService.js';
 import { PointCloudController } from './PointCloudController.js';
 import { ResetButton } from './ResetButton.js';
+import { TrajectoryToggleButton } from './TrajectoryToggleButton.js';
+
 import { setupResize } from './ResizeHandler.js';
 import { animate } from './AnimationLoop.js';
 // Worker blob import
@@ -10,8 +12,10 @@ import PointCloudWorker from './PointCloudWorker.js';
 import { UIOverlay } from './UIOverlay.js';
 import { SceneManager } from './SceneManager.js';
 import { CloudFactory } from './CloudFactory.js';
-import * as THREE from 'three';
 
+import { createPointSizeSlider } from './PointSizeSlider.js';
+
+import * as THREE from 'three';
 
 // ========== Packet Counting Metrics ==========
 // Déclaration des compteurs
@@ -34,13 +38,19 @@ const stats = createStats();
 
 const worker = new Worker(new URL('./PointCloudWorker.js', import.meta.url));
 
-const pcController = new PointCloudController(scene, worker);
+const pcController = new PointCloudController(scene, camera, renderer, worker);
+
+// Création du bouton toggle, relié au controller
+const trajectoryToggleBtn = new TrajectoryToggleButton(pcController);
 
 const uiOverlay = new UIOverlay(renderer); // <-- CORRECT !
 
 const sceneManager = new SceneManager(scene);
 
 const resetButton = new ResetButton(sceneManager, camera, controls);
+
+// Ajoute le slider (optionnel: tu peux placer dans une div spécifique)
+createPointSizeSlider(pcController, { initial: 0.01 });
 
 
 // Add cube
