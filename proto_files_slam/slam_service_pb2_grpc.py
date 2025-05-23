@@ -56,6 +56,16 @@ class SlamServiceStub(object):
                 request_serializer=pointcloud__pb2.PointCloudWithPose.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 _registered_method=True)
+        self.GetPoses = channel.unary_stream(
+                '/IVM.slam.SlamService/GetPoses',
+                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+                response_deserializer=pointcloud__pb2.PoseList.FromString,
+                _registered_method=True)
+        self.ConnectPoses = channel.stream_unary(
+                '/IVM.slam.SlamService/ConnectPoses',
+                request_serializer=pointcloud__pb2.PoseList.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                _registered_method=True)
         self.GetSlamData = channel.unary_stream(
                 '/IVM.slam.SlamService/GetSlamData',
                 request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
@@ -104,6 +114,20 @@ class SlamServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetPoses(self, request, context):
+        """service pour recuperer les poses sur le serveur
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ConnectPoses(self, request_iterator, context):
+        """service pour envoyer les poses sur le serveur
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetSlamData(self, request, context):
         """services data slam liste de points et liste de pose et index
         Service pour récupérer les points et la pose du serveur
@@ -140,6 +164,16 @@ def add_SlamServiceServicer_to_server(servicer, server):
             'ConnectPointCloudWithPose': grpc.stream_unary_rpc_method_handler(
                     servicer.ConnectPointCloudWithPose,
                     request_deserializer=pointcloud__pb2.PointCloudWithPose.FromString,
+                    response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            ),
+            'GetPoses': grpc.unary_stream_rpc_method_handler(
+                    servicer.GetPoses,
+                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                    response_serializer=pointcloud__pb2.PoseList.SerializeToString,
+            ),
+            'ConnectPoses': grpc.stream_unary_rpc_method_handler(
+                    servicer.ConnectPoses,
+                    request_deserializer=pointcloud__pb2.PoseList.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
             'GetSlamData': grpc.unary_stream_rpc_method_handler(
@@ -261,6 +295,60 @@ class SlamService(object):
             target,
             '/IVM.slam.SlamService/ConnectPointCloudWithPose',
             pointcloud__pb2.PointCloudWithPose.SerializeToString,
+            google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetPoses(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/IVM.slam.SlamService/GetPoses',
+            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            pointcloud__pb2.PoseList.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ConnectPoses(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_unary(
+            request_iterator,
+            target,
+            '/IVM.slam.SlamService/ConnectPoses',
+            pointcloud__pb2.PoseList.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options,
             channel_credentials,
