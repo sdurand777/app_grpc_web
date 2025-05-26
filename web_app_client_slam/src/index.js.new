@@ -1,0 +1,446 @@
+// index.js simplifié avec détection de session serveur
+
+import { createScene, createCamera, createRenderer, createControls, createStats } from './init.js';
+import { SlamService } from './SlamService.js';
+import { PointCloudController } from './PointCloudController.js';
+import PointCloudWorker from './PointCloudWorker.js';
+import { PoseService } from './PoseService.js';
+import { PoseController } from './PoseController.js';
+import PoseWorker from './PoseWorker.js';
+import { ResetButton } from './ResetButton.js';
+import { TrajectoryToggleButton } from './TrajectoryToggleButton.js';
+import { setupResize } from './ResizeHandler.js';
+import { animate } from './AnimationLoop.js';
+import { UIOverlay } from './UIOverlay.js';
+import { SceneManager } from './SceneManager.js';
+import { CloudFactory } from './CloudFactory.js';
+import { createPointSizeSlider } from './PointSizeSlider.js';
+import * as THREE from 'three';
+import { DatabaseManager } from './DatabaseManager.js';
+
+// ========== PROTECTION CONTRE LE REFRESH ==========
+function enableBasicRefreshProtection() {
+    // Bloquer F5 et Ctrl+R
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'F5' || (e.ctrlKey && e.key === 'r') || (e.metaKey && e.key === 'r')) {
+            e.preventDefault();
+            console.log('🚫 Page refresh blocked - use window.forceReload() if needed');
+            return false;
+        }
+    });
+    
+    // Avertissement avant fermeture
+    window.addEventListener('beforeunload', function(e) {
+        const message = 'Refresh will lose your current 3D data. Are you sure?';
+        e.preventDefault();
+        e.returnValue = message;
+        return message;
+    });
+    
+    console.log('🛡️ Basic refresh protection enabled');
+}
+
+// Fonction pour forcer le reload si vraiment nécessaire
+window.forceReload = () => {
+    window.onbeforeunload = null; // Désactiver l'avertissement
+    window.location.reload();
+};
+
+// ========== CONFIGURATION ==========
+const APP_CONFIG = {
+    GRPC_SERVER_URL: 'http://192.168.51.30:8080',
+    SESSION_TIMEOUT: 1000, // 1 seconde sans données = session terminée
+    SHOW_STORAGE_INFO: true
+};
+
+// ========== Packet Counting Metrics ==========
+let receivedPackets = 0;
+let packetsPerSecond = 0;
+
+setInterval(() => {
+    packetsPerSecond = receivedPackets;
+    receivedPackets = 0;
+}, 1000);
+
+const scene = createScene();
+const camera = createCamera();
+const renderer = createRenderer();
+const controls = createControls(camera, renderer.domElement);
+const stats = createStats();
+
+const worker = new Worker(new URL('./PointCloudWorker.js', import.meta.url));
+const poseworker = new Worker(new URL('./PoseWorker.js', import.meta.url));
+
+const pcController = new PointCloudController(scene, camera, renderer, worker);
+const poseController = new PoseController(scene, camera, renderer, poseworker);
+
+const db = new DatabaseManager();
+const trajectoryToggleBtn = new TrajectoryToggleButton(poseController);
+const uiOverlay = new UIOverlay(renderer);
+const sceneManager = new SceneManager(scene);
+const resetButton = new ResetButton(sceneManager, camera, controls);
+
+createPointSizeSlider(pcController, { initial: 0.01 });
+
+// ========== GESTION DE SESSION ==========
+let currentSessionActive = false;
+let lastDataReceived = 0;
+let sessionTimeout = null;
+
+// Services gRPC (créés dynamiquement)
+let slam = null;
+let pose = null;
+let streamingStarted = false;
+let connectionRetryInterval = null;
+
+// Fonction pour tester la disponibilité du serveur gRPC
+async function testServerAvailability() {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(APP_CONFIG.GRPC_SERVER_URL, {
+            method: 'HEAD',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+// Fonction pour créer les services gRPC
+function createGrpcServices() {
+    try {
+        slam = new SlamService(APP_CONFIG.GRPC_SERVER_URL);
+        pose = new PoseService(APP_CONFIG.GRPC_SERVER_URL);
+        console.log('✅ gRPC services created');
+        return true;
+    } catch (error) {
+        console.error('❌ Failed to create gRPC services:', error);
+        slam = null;
+        pose = null;
+        return false;
+    }
+}
+
+// Fonction pour démarrer la tentative de connexion automatique
+function startConnectionRetry() {
+    if (connectionRetryInterval) return; // Déjà en cours
+    
+    console.log('🔄 Starting connection retry every 3 seconds...');
+    
+    connectionRetryInterval = setInterval(async () => {
+        if (!streamingStarted) {
+            console.log('🔍 Checking server availability...');
+            const serverAvailable = await testServerAvailability();
+            
+            if (serverAvailable) {
+                console.log('🎉 Server is available! Attempting to connect...');
+                const servicesCreated = createGrpcServices();
+                
+                if (servicesCreated) {
+                    startStreaming();
+                    clearInterval(connectionRetryInterval);
+                    connectionRetryInterval = null;
+                } else {
+                    console.log('❌ Failed to create services, will retry...');
+                }
+            } else {
+                console.log('⏳ Server not available yet, retrying...');
+            }
+        }
+    }, 3000); // Retry toutes les 3 secondes
+}
+
+function isSessionStartFlag(res) {
+    try {
+        const raw = res.toObject();
+        if (raw.pointcloudlist && raw.pointcloudlist.pointcloudsList) {
+            const firstCloud = raw.pointcloudlist.pointcloudsList[0];
+            if (firstCloud && firstCloud.pointsList && firstCloud.pointsList.length > 0) {
+                const firstPoint = firstCloud.pointsList[0];
+                // Vérifier si c'est le point de flag de session (coordonnées -999999)
+                return firstPoint.x === -999999 && firstPoint.y === -999999 && firstPoint.z === -999999;
+            }
+        }
+    } catch (error) {
+        console.error('Erreur lors de la vérification du flag de session:', error);
+    }
+    return false;
+}
+
+// Fonction pour gérer le début d'une nouvelle session
+async function handleNewSession() {
+    console.log('🎬 Nouvelle session détectée du serveur → Nettoyage de la database');
+    
+    currentSessionActive = true;
+    lastDataReceived = Date.now();
+    
+    // Nettoyer la database pour la nouvelle session
+    await db.clearAll();
+    console.log('✅ Database cleared for new session');
+    
+    // Réinitialiser les controllers
+    await pcController.initDatabase(db);
+    await poseController.initDatabase(db);
+    
+    // Marquer qu'on a des données
+    await db.saveMetadata('hasData', true);
+    await db.saveMetadata('lastUpdate', Date.now());
+}
+
+// Fonction pour gérer l'activité de session
+function updateSessionActivity() {
+    lastDataReceived = Date.now();
+    
+    // Annuler le timeout précédent
+    if (sessionTimeout) {
+        clearTimeout(sessionTimeout);
+    }
+    
+    // Définir un nouveau timeout
+    sessionTimeout = setTimeout(() => {
+        if (currentSessionActive) {
+            console.log('📴 Session terminée (timeout) → Données conservées');
+            currentSessionActive = false;
+        }
+    }, APP_CONFIG.SESSION_TIMEOUT);
+}
+
+// Fonction pour afficher les informations de stockage
+async function showStorageInfo() {
+    if (!APP_CONFIG.SHOW_STORAGE_INFO) return;
+    
+    const storageInfo = await db.getStorageInfo();
+    if (storageInfo) {
+        console.log('📊 Storage Info:');
+        console.log(`   Usage: ${storageInfo.usageInMB} MB`);
+        console.log(`   Quota: ${storageInfo.quotaInMB} MB`);
+        console.log(`   Percentage used: ${((storageInfo.usage / storageInfo.quota) * 100).toFixed(2)}%`);
+    }
+}
+
+// Fonction d'initialisation asynchrone
+async function initializeApp() {
+    try {
+        console.log('🚀 Initializing app...');
+        
+        // Initialiser la base de données
+        await db.init();
+        console.log('✅ Database initialized');
+        
+        // Afficher les infos de stockage
+        await showStorageInfo();
+        
+        // Initialiser les controllers avec la DB
+        await pcController.initDatabase(db);
+        await poseController.initDatabase(db);
+        
+        // Charger les données existantes si disponibles
+        const hasData = await db.getMetadata('hasData');
+        if (hasData) {
+            console.log('📂 Loading existing data...');
+            await pcController.loadFromDatabase();
+            await poseController.loadFromDatabase();
+            console.log('✅ Existing data loaded');
+        }
+        
+        // Tenter de se connecter au serveur gRPC
+        console.log('🔍 Testing initial server connection...');
+        const serverAvailable = await testServerAvailability();
+        
+        if (serverAvailable) {
+            console.log('✅ Server available, creating services...');
+            const servicesCreated = createGrpcServices();
+            if (servicesCreated) {
+                startStreaming();
+            } else {
+                console.log('❌ Failed to create services, starting retry...');
+                startConnectionRetry();
+            }
+        } else {
+            console.log('⚠️ Server not available, starting connection retry...');
+            startConnectionRetry();
+        }
+        
+        console.log('🎉 App initialized - ' + (serverAvailable ? 'connected to server' : 'waiting for server...'));
+        
+    } catch (error) {
+        console.error('❌ Error initializing:', error);
+    }
+}
+
+function startStreaming() {
+    if (streamingStarted) {
+        console.log('ℹ️ Streaming already started');
+        return;
+    }
+    
+    if (!slam || !pose) {
+        console.log('❌ gRPC services not available');
+        return;
+    }
+    
+    console.log('🌊 Starting gRPC streams...');
+    
+    try {
+        // Stream pour les point clouds
+        slam.onData((err, res) => {
+            if (err) {
+                console.error('SLAM stream error:', err);
+                // En cas d'erreur de connexion, redémarrer le retry
+                streamingStarted = false;
+                slam = null;
+                pose = null;
+                startConnectionRetry();
+                return;
+            }
+            
+            // Vérifier si c'est le flag de début de session
+            if (isSessionStartFlag(res)) {
+                handleNewSession();
+                return; // Ne pas traiter ce message comme des vraies données
+            }
+            
+            // Traitement normal des données
+            if (currentSessionActive) {
+                pcController.processRaw(res);
+                receivedPackets++;
+                updateSessionActivity();
+            } else {
+                // Première donnée reçue (pas de flag de session détecté)
+                console.log('📡 Première donnée reçue sans flag → Session continue');
+                currentSessionActive = true;
+                pcController.processRaw(res);
+                receivedPackets++;
+                updateSessionActivity();
+            }
+        });
+
+        // Stream pour les poses
+        pose.onPoses((err, res) => {
+            if (err) {
+                console.error('Pose stream error:', err);
+                // En cas d'erreur de connexion, redémarrer le retry
+                streamingStarted = false;
+                slam = null;
+                pose = null;
+                startConnectionRetry();
+                return;
+            }
+            
+            if (currentSessionActive) {
+                poseController.processRaw(res);
+                updateSessionActivity();
+            }
+        });
+        
+        streamingStarted = true;
+        console.log('✅ gRPC streams started successfully');
+        
+    } catch (error) {
+        console.error('❌ Error starting streams:', error);
+        streamingStarted = false;
+        slam = null;
+        pose = null;
+        startConnectionRetry();
+    }
+}
+
+// Fonctions utiles pour la console
+window.clearDatabase = async function() {
+    console.log('🗑️ Manually clearing database...');
+    await db.clearAll();
+    await pcController.initDatabase(db);
+    await poseController.initDatabase(db);
+    console.log('✅ Database cleared manually');
+};
+
+window.forceNewSession = async function() {
+    console.log('🔄 Forcing new session...');
+    await handleNewSession();
+};
+
+window.tryConnectNow = async function() {
+    console.log('🔄 Trying to connect to server now...');
+    
+    if (streamingStarted) {
+        console.log('ℹ️ Already connected!');
+        return;
+    }
+    
+    const serverAvailable = await testServerAvailability();
+    if (serverAvailable) {
+        const servicesCreated = createGrpcServices();
+        if (servicesCreated) {
+            startStreaming();
+            if (connectionRetryInterval) {
+                clearInterval(connectionRetryInterval);
+                connectionRetryInterval = null;
+            }
+            console.log('✅ Connected successfully!');
+        } else {
+            console.log('❌ Failed to create services');
+        }
+    } else {
+        console.log('❌ Server still not available');
+    }
+};
+
+window.stopRetrying = function() {
+    if (connectionRetryInterval) {
+        clearInterval(connectionRetryInterval);
+        connectionRetryInterval = null;
+        console.log('⏹️ Stopped connection retry');
+    } else {
+        console.log('ℹ️ No active retry to stop');
+    }
+};
+
+window.showStorageInfo = showStorageInfo;
+
+window.getSessionStatus = () => {
+    const timeSinceLastData = Date.now() - lastDataReceived;
+    console.log(`Connection & Session Status:`);
+    console.log(`  gRPC Connected: ${streamingStarted}`);
+    console.log(`  Session Active: ${currentSessionActive}`);
+    console.log(`  Retry Active: ${!!connectionRetryInterval}`);
+    console.log(`  Time since last data: ${timeSinceLastData}ms`);
+    console.log(`  Packets per second: ${packetsPerSecond}`);
+    return { 
+        grpcConnected: streamingStarted,
+        sessionActive: currentSessionActive, 
+        retryActive: !!connectionRetryInterval,
+        timeSinceLastData, 
+        packetsPerSecond 
+    };
+};
+
+// Nettoyage lors de la fermeture de la page
+window.addEventListener('beforeunload', () => {
+    if (sessionTimeout) {
+        clearTimeout(sessionTimeout);
+    }
+    if (connectionRetryInterval) {
+        clearInterval(connectionRetryInterval);
+    }
+});
+
+// Démarrer l'application
+enableBasicRefreshProtection();
+initializeApp();
+
+setupResize(camera, renderer);
+animate({ 
+    renderer, 
+    scene, 
+    camera, 
+    controls, 
+    stats, 
+    uiOverlay, 
+    pcController, 
+    getPacketRate: () => packetsPerSecond 
+});

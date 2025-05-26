@@ -1,39 +1,34 @@
-
-// File: src/PointCloudController.js
+// File: src/PoseController.js
 import * as THREE from 'three';
 import { DynamicDrawUsage } from 'three';
-import { CameraMesh } from './CameraMesh.js'; // selon ton chemin
+import { CameraMesh } from './CameraMesh.js';
 import { transpose16, applyPoseToMesh } from './utils.js';
+import { DatabaseManager } from './DatabaseManager.js';
 
 export class PoseController {
-    /**
-        * @param {THREE.Scene} scene
-        * @param {Worker} worker
-        */
-        constructor(scene, camera, renderer, worker) {
-            this.scene = scene;
-            this.camera = camera;
-            this.renderer = renderer;
-            this.worker = worker;
+    constructor(scene, camera, renderer, worker) {
+        this.scene = scene;
+        this.camera = camera;
+        this.renderer = renderer;
+        this.worker = worker;
 
-            // etat du bouton de trajectory
-            this.trajectoryVisible = true; // <--- ici
+        this.db = null;
+        this.poseIndex = 0;
+        this.trajectoryVisible = true;
+        
+        // Ajouter un seuil de distance pour éviter les doublons
+        this.minDistanceThreshold = 0.001; // 1mm
 
-            // init geometry
-            this._initGeometry();
-            // setup worker
-            this._setupWorker();
-        }
+        this._initGeometry();
+        this._setupWorker();
+    }
 
-    // Initialise la géométrie et les buffers
     _initGeometry() {
-        // creation de la camera
-        this.camVis = new CameraMesh(0.2);  // par exemple à l'échelle 0.2
+        this.camVis = new CameraMesh(0.2);
         this.scene.add(this.camVis.mesh); 
 
-        // trajectory geometry
         this.cameraTrajectory = [];
-        this.trajectoryMaterial = new THREE.LineBasicMaterial({ color: 0x000080 }); // bleu marine
+        this.trajectoryMaterial = new THREE.LineBasicMaterial({ color: 0x000080 });
         this.trajectoryGeometry = new THREE.BufferGeometry();
         this.trajectoryLine = new THREE.Line(this.trajectoryGeometry, this.trajectoryMaterial);
         this.trajectoryLine.frustumCulled = false;
@@ -41,12 +36,84 @@ export class PoseController {
 
         this.sphereMarkers = [];
         this.sphereGeometry = new THREE.SphereGeometry(0.01, 16, 16);
-        this.sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff8000 }); // orange
-
+        this.sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff8000 });
     }
 
+    async initDatabase(db) {
+        this.db = db;
+        const metadata = await db.getMetadata('poseState');
+        if (metadata) {
+            this.poseIndex = metadata.poseIndex || 0;
+        }
+    }
 
-    // set flag to show or not trajectory
+    // Méthode pour vérifier si une position existe déjà
+    _positionExists(newPosition) {
+        return this.cameraTrajectory.some(existingPos => 
+            existingPos.distanceTo(newPosition) < this.minDistanceThreshold
+        );
+    }
+
+    // Méthode pour nettoyer la trajectoire avant rechargement
+    _clearTrajectory() {
+        // Supprimer les sphères existantes
+        this.sphereMarkers.forEach(sphere => {
+            this.scene.remove(sphere);
+        });
+        this.sphereMarkers = [];
+        
+        // Vider le tableau de trajectoire
+        this.cameraTrajectory = [];
+        
+        // Réinitialiser la géométrie de ligne
+        this.trajectoryGeometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+        this.trajectoryGeometry.setDrawRange(0, 0);
+    }
+
+    async loadFromDatabase() {
+        if (!this.db) return;
+        
+        // Nettoyer la trajectoire existante avant de charger
+        this._clearTrajectory();
+        
+        const poses = await this.db.getAllPoses();
+        poses.sort((a, b) => a.trajectoryIndex - b.trajectoryIndex);
+        
+        for (const pose of poses) {
+            const position = new THREE.Vector3().fromArray(pose.position);
+            
+            // Ajouter sans vérification de doublon car on a nettoyé avant
+            this.cameraTrajectory.push(position);
+            
+            // Créer la sphère
+            const sphere = new THREE.Mesh(this.sphereGeometry, this.sphereMaterial);
+            sphere.frustumCulled = false;
+            sphere.position.copy(position);
+            sphere.visible = this.trajectoryVisible;
+            this.scene.add(sphere);
+            this.sphereMarkers.push(sphere);
+        }
+        
+        // Mettre à jour la ligne de trajectoire
+        this._updateTrajectoryLine();
+        
+        // Appliquer la dernière pose à la caméra
+        if (poses.length > 0) {
+            const lastPose = poses[poses.length - 1];
+            applyPoseToMesh(this.camVis.mesh, lastPose.matrix);
+        }
+    }
+
+    // Méthode séparée pour mettre à jour la ligne de trajectoire
+    _updateTrajectoryLine() {
+        if (this.cameraTrajectory.length > 0) {
+            const positionsArray = [];
+            this.cameraTrajectory.forEach(v => positionsArray.push(v.x, v.y, v.z));
+            this.trajectoryGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positionsArray, 3));
+            this.trajectoryGeometry.setDrawRange(0, this.cameraTrajectory.length);
+        }
+    }
+
     setTrajectoryVisible(visible) {
         this.trajectoryVisible = visible;
         if (this.trajectoryLine) this.trajectoryLine.visible = visible;
@@ -55,59 +122,54 @@ export class PoseController {
         }
     }
 
-
-    // Configure l'écoute du worker
     _setupWorker() {
         this.worker.onmessage = e => {
             const { poseMatrix } = e.data;
             this._updateBuffers(poseMatrix);
-            // Optionnel : gérer la poseMatrix ici si besoin
         };
     }
 
-    /**
-        * Copie en bloc du worker vers le GPU buffer
-        * @param {Float32Array} coords
-        * @param {Float32Array} colors
-        */
-        _updateBuffers(poseMatrix) {
-            // === LOG DE LA MATRICE DE LA DERNIÈRE POSE ===
-            if (poseMatrix && poseMatrix.length === 16) {
-                applyPoseToMesh(this.camVis.mesh, poseMatrix);
+    async _updateBuffers(poseMatrix) {
+        if (poseMatrix && poseMatrix.length === 16) {
+            applyPoseToMesh(this.camVis.mesh, poseMatrix);
 
-                // Extraire la position caméra
-                const poseMatrixColMajor = transpose16(poseMatrix);
+            const poseMatrixColMajor = transpose16(poseMatrix);
+            const poseMat = new THREE.Matrix4().fromArray(poseMatrixColMajor);
+            const position = new THREE.Vector3();
+            position.setFromMatrixPosition(poseMat);
 
-                const poseMat = new THREE.Matrix4().fromArray(poseMatrixColMajor);
-                const position = new THREE.Vector3();
-                position.setFromMatrixPosition(poseMat);
+            // Vérification améliorée pour éviter les doublons
+            if (!this._positionExists(position)) {
+                this.cameraTrajectory.push(position.clone());
 
-                // Stocker la position et mettre à jour la trajectoire
-                if (this.cameraTrajectory.length === 0 || !this.cameraTrajectory[this.cameraTrajectory.length-1].equals(position)) {
-                    this.cameraTrajectory.push(position.clone());
-
-                    // Met à jour la ligne
-                    const positionsArray = [];
-                    this.cameraTrajectory.forEach(v => positionsArray.push(v.x, v.y, v.z));
-                    this.trajectoryGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positionsArray, 3));
-                    this.trajectoryGeometry.setDrawRange(0, this.cameraTrajectory.length);
-
-                    // Ajoute la sphère rouge
-                    const sphere = new THREE.Mesh(this.sphereGeometry, this.sphereMaterial);
-                    sphere.frustumCulled = false;
-                    sphere.position.copy(position);
-                    sphere.visible = this.trajectoryVisible;   // <-- respecte l’état du bouton
-                    this.scene.add(sphere);
-                    this.sphereMarkers.push(sphere);
+                // Sauvegarder la pose
+                if (this.db) {
+                    await this.db.savePose(
+                        poseMatrix,
+                        position.toArray(),
+                        this.poseIndex++
+                    );
+                    await this.db.saveMetadata('poseState', {
+                        poseIndex: this.poseIndex
+                    });
                 }
 
+                // Mettre à jour la ligne
+                this._updateTrajectoryLine();
+
+                // Ajouter la sphère
+                const sphere = new THREE.Mesh(this.sphereGeometry, this.sphereMaterial);
+                sphere.frustumCulled = false;
+                sphere.position.copy(position);
+                sphere.visible = this.trajectoryVisible;
+                this.scene.add(sphere);
+                this.sphereMarkers.push(sphere);
             }
-
-
         }
+    }
 
-        processRaw(response) {
-            const raw = response.toObject();
-            this.worker.postMessage({ type: 'processPoseList', payload: raw });
-        }
+    processRaw(response) {
+        const raw = response.toObject();
+        this.worker.postMessage({ type: 'processPoseList', payload: raw });
+    }
 }

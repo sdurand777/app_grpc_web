@@ -5,6 +5,7 @@ import { DynamicDrawUsage } from 'three';
 import { enablePointDistanceMeasurement } from './PointDistanceMeasurement.js';
 import { CameraMesh } from './CameraMesh.js'; // selon ton chemin
 import { transpose16, applyPoseToMesh } from './utils.js';
+import { DatabaseManager } from './DatabaseManager.js';
 
 export class PointCloudController {
     /**
@@ -25,6 +26,13 @@ export class PointCloudController {
             this.max_pick_points = 200000; // buffer max for picking
             this.pickPositions = [] // tableau de floats
             this.pickOriginalIndices = [] // index dans le buffer principal
+
+            // Dans le constructeur, après this.pickOriginalIndices = []
+            this.db = null;
+            this.chunkIndex = 0;
+            this.SAVE_INTERVAL = 5000; // Sauvegarde toutes les 5000 points
+            this.unsavedPoints = 0;
+
 
             // etat du bouton de trajectory
             this.trajectoryVisible = true; // <--- ici
@@ -83,6 +91,51 @@ export class PointCloudController {
 
     }
 
+
+    // Ajouter cette méthode après _initGeometry()
+    async initDatabase(db) {
+        this.db = db;
+        // Charger les données existantes
+        const metadata = await db.getMetadata('pointCloudState');
+        if (metadata) {
+            this.writeIndex = metadata.writeIndex || 0;
+            this.displayCount = metadata.displayCount || 0;
+            this.chunkIndex = metadata.chunkIndex || 0;
+        }
+    }
+
+
+
+    // Ajouter cette méthode pour charger les données
+    async loadFromDatabase() {
+        if (!this.db) return;
+        
+        const chunks = await this.db.getAllPointChunks();
+        chunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
+        
+        for (const chunk of chunks) {
+            const coords = chunk.coords;
+            const colors = chunk.colors;
+            const count = coords.length / 3;
+            
+            // Copier directement dans les buffers
+            const offset = this.writeIndex * 3;
+            this.posArr.set(coords, offset);
+            this.colArr.set(colors, offset);
+            
+            this.writeIndex += count;
+        }
+        
+        // Mettre à jour l'affichage
+        if (this.writeIndex > 0) {
+            this.displayCount = this.writeIndex;
+            this.geom.setDrawRange(0, this.displayCount);
+            this.posAttr.needsUpdate = true;
+            this.colAttr.needsUpdate = true;
+        }
+    }
+
+
     // enable distance picking
         enableDistanceMeasurement() {
             return enablePointDistanceMeasurement(
@@ -132,7 +185,7 @@ export class PointCloudController {
         * @param {Float32Array} coords
         * @param {Float32Array} colors
         */
-        _updateBuffers(coords, colors, poseMatrix) {
+        async _updateBuffers(coords, colors, poseMatrix) {
             const count = coords.length / 3;
             const offset = this.writeIndex * 3;
 
@@ -196,42 +249,28 @@ export class PointCloudController {
             this.writeIndex += count;
             this.displayCount = this.writeIndex;
             this.geom.setDrawRange(0, this.displayCount);
-            // Ajoute cette ligne juste ici :
-            //this.geom.computeBoundingBox();
-            //console.log(`Rendered points: ${this.writeIndex}`);
 
-            // // === LOG DE LA MATRICE DE LA DERNIÈRE POSE ===
-            // if (poseMatrix && poseMatrix.length === 16) {
-            //     applyPoseToMesh(this.camVis.mesh, poseMatrix);
-            //
-            //     // Extraire la position caméra
-            //     const poseMatrixColMajor = transpose16(poseMatrix);
-            //
-            //     const poseMat = new THREE.Matrix4().fromArray(poseMatrixColMajor);
-            //     const position = new THREE.Vector3();
-            //     position.setFromMatrixPosition(poseMat);
-            //
-            //     // Stocker la position et mettre à jour la trajectoire
-            //     if (this.cameraTrajectory.length === 0 || !this.cameraTrajectory[this.cameraTrajectory.length-1].equals(position)) {
-            //         this.cameraTrajectory.push(position.clone());
-            //
-            //         // Met à jour la ligne
-            //         const positionsArray = [];
-            //         this.cameraTrajectory.forEach(v => positionsArray.push(v.x, v.y, v.z));
-            //         this.trajectoryGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positionsArray, 3));
-            //         this.trajectoryGeometry.setDrawRange(0, this.cameraTrajectory.length);
-            //
-            //         // Ajoute la sphère rouge
-            //         const sphere = new THREE.Mesh(this.sphereGeometry, this.sphereMaterial);
-            //         sphere.frustumCulled = false;
-            //         sphere.position.copy(position);
-            //         sphere.visible = this.trajectoryVisible;   // <-- respecte l’état du bouton
-            //         this.scene.add(sphere);
-            //         this.sphereMarkers.push(sphere);
-            //     }
-            //
-            // }
 
+            // Ajouter après this.writeIndex += count;
+            this.unsavedPoints += count;
+            
+            // Sauvegarder par chunks
+            if (this.db && this.unsavedPoints >= this.SAVE_INTERVAL) {
+                const startIdx = (this.writeIndex - this.unsavedPoints) * 3;
+                const endIdx = this.writeIndex * 3;
+                
+                const chunkCoords = this.posArr.slice(startIdx, endIdx);
+                const chunkColors = this.colArr.slice(startIdx, endIdx);
+                
+                await this.db.savePointChunk(chunkCoords, chunkColors, this.chunkIndex++);
+                await this.db.saveMetadata('pointCloudState', {
+                    writeIndex: this.writeIndex,
+                    displayCount: this.displayCount,
+                    chunkIndex: this.chunkIndex
+                });
+                
+                this.unsavedPoints = 0;
+            }
 
         }
 

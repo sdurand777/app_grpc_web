@@ -1,111 +1,115 @@
-
 import { createScene, createCamera, createRenderer, createControls, createStats } from './init.js';
-
-// pout gerer les pcds
-import { SlamService } from './SlamService.js';
 import { PointCloudController } from './PointCloudController.js';
-import PointCloudWorker from './PointCloudWorker.js';
-
-// pout gerer les pcds
-import { PoseService } from './PoseService.js';
 import { PoseController } from './PoseController.js';
-import PoseWorker from './PoseWorker.js';
-
-
-
-
 import { ResetButton } from './ResetButton.js';
 import { TrajectoryToggleButton } from './TrajectoryToggleButton.js';
-
 import { setupResize } from './ResizeHandler.js';
 import { animate } from './AnimationLoop.js';
-// Worker blob import
 import { UIOverlay } from './UIOverlay.js';
 import { SceneManager } from './SceneManager.js';
-import { CloudFactory } from './CloudFactory.js';
-
 import { createPointSizeSlider } from './PointSizeSlider.js';
+import { StreamManager } from './StreamManager.js';
+import { PageProtector } from './PageProtector.js';
+import PointCloudWorker from './PointCloudWorker.js';
+import PoseWorker from './PoseWorker.js';
 
-import * as THREE from 'three';
-
-// ========== Packet Counting Metrics ==========
-// Déclaration des compteurs
+// ========== Packet Metrics ==========
 let receivedPackets = 0;
 let packetsPerSecond = 0;
 
-// Timer pour calculer les paquets par seconde
-setInterval(() => {
+const packetTimer = setInterval(() => {
   packetsPerSecond = receivedPackets;
-  // Réinitialise pour la prochaine période
   receivedPackets = 0;
 }, 1000);
 
-
+// ========== Scene Setup ==========
 const scene = createScene();
 const camera = createCamera();
 const renderer = createRenderer();
 const controls = createControls(camera, renderer.domElement);
 const stats = createStats();
 
-
-// worker pour le pcd
+// ========== Workers & Controllers ==========
 const worker = new Worker(new URL('./PointCloudWorker.js', import.meta.url));
-// worker pour la pose
 const poseworker = new Worker(new URL('./PoseWorker.js', import.meta.url));
-
-
-// controller pour le pcd
 const pcController = new PointCloudController(scene, camera, renderer, worker);
 const poseController = new PoseController(scene, camera, renderer, poseworker);
 
-// Création du bouton toggle, relié au controller
+// ========== UI ==========
+const uiOverlay = new UIOverlay(renderer);
+const sceneManager = new SceneManager(scene);
+const resetButton = new ResetButton(sceneManager, camera, controls);
 const trajectoryToggleBtn = new TrajectoryToggleButton(poseController);
 
-const uiOverlay = new UIOverlay(renderer); // <-- CORRECT !
+// ========== Stream Manager ==========
+const streamManager = new StreamManager('http://192.168.51.30:8080');
 
-const sceneManager = new SceneManager(scene);
-
-const resetButton = new ResetButton(sceneManager, camera, controls);
-
-// Ajoute le slider (optionnel: tu peux placer dans une div spécifique)
-createPointSizeSlider(pcController, { initial: 0.01 });
-
-
-// Add cube
-// const geometry = CloudFactory.createCubePointCloud({ nbPoints: 5000, size: 5 });
-// const material = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05 });
-// const points = new THREE.Points(geometry, material);
-// scene.add(points);
-
-
-// service grpc pour les pcds
-const slam = new SlamService('http://192.168.51.30:8080');
-// service grpc pour les poses
-const pose = new PoseService('http://192.168.51.30:8080');
-
-// stream on pcds
-slam.onData((err, res) => {
-  if (err) console.error(err);
-  else pcController.processRaw(res);
-  // Incrémentation du compteur de paquets reçus
-  receivedPackets++;
-
+// Configuration des callbacks du stream
+streamManager.setCallbacks({
+    onPointCloudData: (data) => pcController.processRaw(data),
+    onPoseData: (data) => poseController.processRaw(data),
+    onPacketReceived: () => receivedPackets++,
+    onError: (streamType, error) => console.error(`Stream ${streamType} error:`, error),
+    onStatusChange: (status, error) => {
+        console.log(`Stream status: ${status}`);
+        if (error) console.error('Stream error:', error);
+    }
 });
 
+// ========== Cleanup ==========
+function cleanup() {
+    streamManager.stop();
+    clearInterval(packetTimer);
+    if (worker) worker.terminate();
+    if (poseworker) poseworker.terminate();
+    console.log('Application cleanup completed');
+}
 
-// stream on poses
-pose.onPoses((err, res) => {
-  if (err) console.error(err);
-  else poseController.processRaw(res);
-
+// ========== Page Protection ==========
+const pageProtector = new PageProtector({
+    onBeforeLeave: cleanup,
+    onLeave: (reason) => console.log(`Leaving page: ${reason}`)
 });
 
+// ========== Initialization ==========
+function initializeApp() {
+    console.log('Initializing application...');
+    
+    // Setup UI
+    createPointSizeSlider(pcController, { initial: 0.01 });
+    setupResize(camera, renderer);
+    
+    // Start streaming
+    streamManager.start();
+    
+    // Start animation loop
+    animate({ 
+        renderer, 
+        scene, 
+        camera, 
+        controls, 
+        stats, 
+        uiOverlay, 
+        pcController, 
+        getPacketRate: () => packetsPerSecond 
+    });
+    
+    console.log('Application initialized successfully');
+}
 
+// ========== Application Start ==========
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    initializeApp();
+}
 
-
-//new ResetButton(camera, controls);
-setupResize(camera, renderer);
-//animate({ renderer, scene, camera, controls, stats });
-
-animate({ renderer, scene, camera, controls, stats, uiOverlay, pcController, getPacketRate: () => packetsPerSecond });
-
+// ========== Debug Interface ==========
+window.debugApp = {
+    pcController,
+    poseController,
+    streamManager,
+    pageProtector,
+    getPacketRate: () => packetsPerSecond,
+    getReceivedPackets: () => receivedPackets
+};
