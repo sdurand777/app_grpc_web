@@ -5,12 +5,12 @@ from concurrent import futures
 from google.protobuf.empty_pb2 import Empty
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-gen_python_path = os.path.join(current_dir, '..', 'proto_files_exp')
+gen_python_path = os.path.join(current_dir, '..', 'proto_files_slam')
 sys.path.append(gen_python_path)
 
+import pointcloud_pb2
 import slam_service_pb2
 import slam_service_pb2_grpc
-import pointcloud_pb2
 import time
 
 import collections
@@ -107,7 +107,7 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
         logger.info("Réception d'un stream PoseList (ConnectPoses) du client...")
 
         # reset buffer poses
-        self._global_buffer_poses = []
+        #self._global_buffer_poses = []
 
         for poselist in request_iterator:
             logger.debug(f"Reçu PoseList contenant {len(poselist.poses)} poses.")
@@ -116,18 +116,35 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             self._global_buffer_poses.append(poselist)
         return Empty()
 
+    # def GetPoses(self, request, context):
+    #     """Envoi d'un stream de PoseList vers le client."""
+    #     logger.info("Envoi d'un stream PoseList (GetPoses) au client...")
+    #     # Tu pourrais envoyer ce qui a été stocké, ou juste un exemple vide, ou une boucle infinie
+    #     logger.debug(f"Envoie List de PoseList {len(self._global_buffer_poses)} poselist.")
+    #     for poselist in self._global_buffer_poses:
+    #         yield poselist
+    #     # Si rien à envoyer, tu peux juste finir le stream sans yield.
+
     def GetPoses(self, request, context):
-        """Envoi d'un stream de PoseList vers le client."""
         logger.info("Envoi d'un stream PoseList (GetPoses) au client...")
-        # Tu pourrais envoyer ce qui a été stocké, ou juste un exemple vide, ou une boucle infinie
-        for poselist in self._global_buffer_poses:
-            yield poselist
-        # Si rien à envoyer, tu peux juste finir le stream sans yield.
+        sent_count = 0
+        try:
+            while True:
+                # Envoie tous les nouveaux PoseList non envoyés
+                while sent_count < len(self._global_buffer_poses):
+                    poselist = self._global_buffer_poses[sent_count]
+                    logger.info(f"Envoi PoseList {sent_count} contenant {len(poselist.poses)} poses")
+                    yield poselist
+                    sent_count += 1
+                time.sleep(0.1)  # Attendre un peu avant de re-checker (évite de saturer le CPU)
+        except grpc.RpcError as e:
+            logger.error(f"Erreur RPC dans GetPoses: {e.code()}, message : {e.details()}")
+
 
 
     # RPC ConnectPointCloudWithPose service pour recevoir le PCD et la pose du client
     def ConnectSlamData(self, request_iterator, context):
-        print("Réception des slam data du client...")
+        #print("Réception des slam data du client...")
 
         for data in request_iterator:
 
@@ -177,7 +194,7 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
 
 
     def GetSlamData(self, request, context):
-        logger.info("Envoi des slam data au client ...")
+        #logger.info("Envoi des slam data au client ...")
         try:
             BATCH_SIZE = 1000
             TIMEOUT_EMPTY = 2.0  # s
@@ -228,9 +245,9 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
                     batch_indexlist = pointcloud_pb2.Index()
                     # Optionnel : index, à gérer selon ton protocole
 
-                    logger.debug(f"batch_poselist {batch_poselist.poses}")
+                    #logger.debug(f"batch_poselist {batch_poselist.poses}")
 
-                    logger.debug(f"Envoi d'un batch optimisé de {BATCH_SIZE} points nouveaux au client avec poses associées.")
+                    #logger.debug(f"Envoi d'un batch optimisé de {BATCH_SIZE} points nouveaux au client avec poses associées.")
                     yield pointcloud_pb2.SlamData(
                         pointcloudlist=batch_pointcloudlist,
                         poselist=batch_poselist,
@@ -252,7 +269,7 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
                     batch_indexlist = pointcloud_pb2.Index()
                     # Optionnel : index, à gérer selon ton protocole
 
-                    logger.debug(f"Envoi du dernier batch optimisé de {len(buffer_points_to_send)} points (timeout) avec poses associées.")
+                    #logger.debug(f"Envoi du dernier batch optimisé de {len(buffer_points_to_send)} points (timeout) avec poses associées.")
                     yield pointcloud_pb2.SlamData(
                         pointcloudlist=batch_pointcloudlist,
                         poselist=batch_poselist,

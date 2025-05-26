@@ -1,14 +1,25 @@
 
 import { createScene, createCamera, createRenderer, createControls, createStats } from './init.js';
+
+// pout gerer les pcds
 import { SlamService } from './SlamService.js';
 import { PointCloudController } from './PointCloudController.js';
+import PointCloudWorker from './PointCloudWorker.js';
+
+// pout gerer les pcds
+import { PoseService } from './PoseService.js';
+import { PoseController } from './PoseController.js';
+import PoseWorker from './PoseWorker.js';
+
+
+
+
 import { ResetButton } from './ResetButton.js';
 import { TrajectoryToggleButton } from './TrajectoryToggleButton.js';
 
 import { setupResize } from './ResizeHandler.js';
 import { animate } from './AnimationLoop.js';
 // Worker blob import
-import PointCloudWorker from './PointCloudWorker.js';
 import { UIOverlay } from './UIOverlay.js';
 import { SceneManager } from './SceneManager.js';
 import { CloudFactory } from './CloudFactory.js';
@@ -36,12 +47,19 @@ const renderer = createRenderer();
 const controls = createControls(camera, renderer.domElement);
 const stats = createStats();
 
-const worker = new Worker(new URL('./PointCloudWorker.js', import.meta.url));
 
+// worker pour le pcd
+const worker = new Worker(new URL('./PointCloudWorker.js', import.meta.url));
+// worker pour la pose
+const poseworker = new Worker(new URL('./PoseWorker.js', import.meta.url));
+
+
+// controller pour le pcd
 const pcController = new PointCloudController(scene, camera, renderer, worker);
+const poseController = new PoseController(scene, camera, renderer, poseworker);
 
 // Création du bouton toggle, relié au controller
-const trajectoryToggleBtn = new TrajectoryToggleButton(pcController);
+const trajectoryToggleBtn = new TrajectoryToggleButton(poseController);
 
 const uiOverlay = new UIOverlay(renderer); // <-- CORRECT !
 
@@ -60,8 +78,12 @@ createPointSizeSlider(pcController, { initial: 0.01 });
 // scene.add(points);
 
 
+// service grpc pour les pcds
 const slam = new SlamService('http://192.168.51.30:8080');
+// service grpc pour les poses
+const pose = new PoseService('http://192.168.51.30:8080');
 
+// stream on pcds
 slam.onData((err, res) => {
   if (err) console.error(err);
   else pcController.processRaw(res);
@@ -69,6 +91,17 @@ slam.onData((err, res) => {
   receivedPackets++;
 
 });
+
+
+// stream on poses
+pose.onPoses((err, res) => {
+  if (err) console.error(err);
+  else poseController.processRaw(res);
+
+});
+
+
+
 
 //new ResetButton(camera, controls);
 setupResize(camera, renderer);

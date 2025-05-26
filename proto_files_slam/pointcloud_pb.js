@@ -2,15 +2,24 @@
 /**
  * @fileoverview
  * @enhanceable
+ * @suppress {missingRequire} reports error on implicit type usages.
  * @suppress {messageConventions} JS Compiler reports an error if a variable or
  *     field starts with 'MSG_' and isn't a translatable message.
  * @public
  */
 // GENERATED CODE -- DO NOT EDIT!
+/* eslint-disable */
+// @ts-nocheck
 
 var jspb = require('google-protobuf');
 var goog = jspb;
-var global = Function('return this')();
+var global =
+    (typeof globalThis !== 'undefined' && globalThis) ||
+    (typeof window !== 'undefined' && window) ||
+    (typeof global !== 'undefined' && global) ||
+    (typeof self !== 'undefined' && self) ||
+    (function () { return this; }).call(null) ||
+    Function('return this')();
 
 var google_protobuf_timestamp_pb = require('google-protobuf/google/protobuf/timestamp_pb.js');
 goog.object.extend(proto, google_protobuf_timestamp_pb);
@@ -224,12 +233,12 @@ proto.IVM.slam.Point.prototype.toObject = function(opt_includeInstance) {
  */
 proto.IVM.slam.Point.toObject = function(includeInstance, msg) {
   var f, obj = {
-    x: jspb.Message.getFloatingPointFieldWithDefault(msg, 1, 0.0),
-    y: jspb.Message.getFloatingPointFieldWithDefault(msg, 2, 0.0),
-    z: jspb.Message.getFloatingPointFieldWithDefault(msg, 3, 0.0),
-    r: jspb.Message.getFloatingPointFieldWithDefault(msg, 4, 0.0),
-    g: jspb.Message.getFloatingPointFieldWithDefault(msg, 5, 0.0),
-    b: jspb.Message.getFloatingPointFieldWithDefault(msg, 6, 0.0)
+x: jspb.Message.getFloatingPointFieldWithDefault(msg, 1, 0.0),
+y: jspb.Message.getFloatingPointFieldWithDefault(msg, 2, 0.0),
+z: jspb.Message.getFloatingPointFieldWithDefault(msg, 3, 0.0),
+r: jspb.Message.getFloatingPointFieldWithDefault(msg, 4, 0.0),
+g: jspb.Message.getFloatingPointFieldWithDefault(msg, 5, 0.0),
+b: jspb.Message.getFloatingPointFieldWithDefault(msg, 6, 0.0)
   };
 
   if (includeInstance) {
@@ -511,7 +520,7 @@ proto.IVM.slam.PointCloud.prototype.toObject = function(opt_includeInstance) {
  */
 proto.IVM.slam.PointCloud.toObject = function(includeInstance, msg) {
   var f, obj = {
-    pointsList: jspb.Message.toObjectList(msg.getPointsList(),
+pointsList: jspb.Message.toObjectList(msg.getPointsList(),
     proto.IVM.slam.Point.toObject, includeInstance)
   };
 
@@ -671,7 +680,7 @@ proto.IVM.slam.Pose.prototype.toObject = function(opt_includeInstance) {
  */
 proto.IVM.slam.Pose.toObject = function(includeInstance, msg) {
   var f, obj = {
-    matrixList: (f = jspb.Message.getRepeatedFloatingPointField(msg, 1)) == null ? undefined : f
+matrixList: (f = jspb.Message.getRepeatedFloatingPointField(msg, 1)) == null ? undefined : f
   };
 
   if (includeInstance) {
@@ -709,8 +718,10 @@ proto.IVM.slam.Pose.deserializeBinaryFromReader = function(msg, reader) {
     var field = reader.getFieldNumber();
     switch (field) {
     case 1:
-      var value = /** @type {!Array<number>} */ (reader.readPackedDouble());
-      msg.setMatrixList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedDouble() : [reader.readDouble()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addMatrix(values[i]);
+      }
       break;
     default:
       reader.skipField();
@@ -827,7 +838,7 @@ proto.IVM.slam.Index.prototype.toObject = function(opt_includeInstance) {
  */
 proto.IVM.slam.Index.toObject = function(includeInstance, msg) {
   var f, obj = {
-    indexList: (f = jspb.Message.getRepeatedField(msg, 1)) == null ? undefined : f
+indexList: (f = jspb.Message.getRepeatedField(msg, 1)) == null ? undefined : f
   };
 
   if (includeInstance) {
@@ -865,8 +876,10 @@ proto.IVM.slam.Index.deserializeBinaryFromReader = function(msg, reader) {
     var field = reader.getFieldNumber();
     switch (field) {
     case 1:
-      var value = /** @type {!Array<number>} */ (reader.readPackedInt32());
-      msg.setIndexList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedInt32() : [reader.readInt32()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addIndex(values[i]);
+      }
       break;
     default:
       reader.skipField();
@@ -983,7 +996,7 @@ proto.IVM.slam.PointCloudList.prototype.toObject = function(opt_includeInstance)
  */
 proto.IVM.slam.PointCloudList.toObject = function(includeInstance, msg) {
   var f, obj = {
-    pointcloudsList: jspb.Message.toObjectList(msg.getPointcloudsList(),
+pointcloudsList: jspb.Message.toObjectList(msg.getPointcloudsList(),
     proto.IVM.slam.PointCloud.toObject, includeInstance)
   };
 
@@ -1143,7 +1156,7 @@ proto.IVM.slam.PoseList.prototype.toObject = function(opt_includeInstance) {
  */
 proto.IVM.slam.PoseList.toObject = function(includeInstance, msg) {
   var f, obj = {
-    posesList: jspb.Message.toObjectList(msg.getPosesList(),
+posesList: jspb.Message.toObjectList(msg.getPosesList(),
     proto.IVM.slam.Pose.toObject, includeInstance)
   };
 
@@ -1296,8 +1309,8 @@ proto.IVM.slam.PointCloudWithPose.prototype.toObject = function(opt_includeInsta
  */
 proto.IVM.slam.PointCloudWithPose.toObject = function(includeInstance, msg) {
   var f, obj = {
-    pointcloud: (f = msg.getPointcloud()) && proto.IVM.slam.PointCloud.toObject(includeInstance, f),
-    pose: (f = msg.getPose()) && proto.IVM.slam.Pose.toObject(includeInstance, f)
+pointcloud: (f = msg.getPointcloud()) && proto.IVM.slam.PointCloud.toObject(includeInstance, f),
+pose: (f = msg.getPose()) && proto.IVM.slam.Pose.toObject(includeInstance, f)
   };
 
   if (includeInstance) {
@@ -1498,9 +1511,9 @@ proto.IVM.slam.SlamData.prototype.toObject = function(opt_includeInstance) {
  */
 proto.IVM.slam.SlamData.toObject = function(includeInstance, msg) {
   var f, obj = {
-    pointcloudlist: (f = msg.getPointcloudlist()) && proto.IVM.slam.PointCloudList.toObject(includeInstance, f),
-    poselist: (f = msg.getPoselist()) && proto.IVM.slam.PoseList.toObject(includeInstance, f),
-    indexlist: (f = msg.getIndexlist()) && proto.IVM.slam.Index.toObject(includeInstance, f)
+pointcloudlist: (f = msg.getPointcloudlist()) && proto.IVM.slam.PointCloudList.toObject(includeInstance, f),
+poselist: (f = msg.getPoselist()) && proto.IVM.slam.PoseList.toObject(includeInstance, f),
+indexlist: (f = msg.getIndexlist()) && proto.IVM.slam.Index.toObject(includeInstance, f)
   };
 
   if (includeInstance) {
