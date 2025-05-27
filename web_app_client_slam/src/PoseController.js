@@ -13,6 +13,11 @@ export class PoseController {
         this.worker = worker;
 
         this.db = null;
+        this.sessionId = null;
+        this.trajectoryIndex = 0;
+        this.SAVE_INTERVAL = 10; // Sauvegarder toutes les 10 poses
+        this.unsavedPoses = [];
+
         this.poseIndex = 0;
         this.trajectoryVisible = true;
         
@@ -22,6 +27,23 @@ export class PoseController {
         this._initGeometry();
         this._setupWorker();
     }
+
+    // Initialiser la base de données
+    async initDatabase(db) {
+        this.db = db;
+    }
+
+
+    // Définir la session
+    setSessionId(sessionId) {
+        this.sessionId = sessionId;
+        console.log('PoseController: Session ID set to', sessionId);
+        
+        // Réinitialiser les compteurs pour une nouvelle session
+        this.trajectoryIndex = 0;
+        this.unsavedPoses = [];
+    }
+
 
     _initGeometry() {
         this.camVis = new CameraMesh(0.2);
@@ -69,6 +91,59 @@ export class PoseController {
         this.trajectoryGeometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
         this.trajectoryGeometry.setDrawRange(0, 0);
     }
+
+
+    // Vider la trajectoire
+    clearTrajectory() {
+        // Vider les arrays de trajectoire
+        if (this.cameraTrajectory) {
+            this.cameraTrajectory = [];
+        }
+        
+        // Supprimer les marqueurs de sphère
+        if (this.sphereMarkers) {
+            this.sphereMarkers.forEach(sphere => {
+                this.scene.remove(sphere);
+            });
+            this.sphereMarkers = [];
+        }
+        
+        // Réinitialiser la ligne de trajectoire
+        if (this.trajectoryLine && this.trajectoryGeometry) {
+            this.trajectoryGeometry.setFromPoints([]);
+            this.trajectoryLine.geometry.attributes.position.needsUpdate = true;
+        }
+        
+        this.trajectoryIndex = 0;
+        console.log('Pose trajectory cleared');
+    }
+
+    // Charger depuis une session
+    async loadFromSession(sessionId) {
+        if (!this.db || !sessionId) return;
+        
+        console.log(`Loading pose data for session: ${sessionId}`);
+        
+        try {
+            const poses = await this.db.getPosesBySession(sessionId);
+            console.log(`Found ${poses.length} poses to load`);
+            
+            // Réinitialiser la trajectoire
+            this.clearTrajectory();
+            
+            for (const poseData of poses) {
+                if (poseData.matrix) {
+                    // Recréer la pose depuis la matrice sauvegardée
+                    this._addPoseToTrajectory(poseData.matrix, poseData.position);
+                }
+            }
+            
+            console.log(`Loaded ${poses.length} poses from session ${sessionId}`);
+        } catch (error) {
+            console.error('Error loading poses from session:', error);
+        }
+    }
+
 
     async loadFromDatabase() {
         if (!this.db) return;

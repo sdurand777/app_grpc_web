@@ -58,7 +58,13 @@ message SlamData {
 }
 
 
-
+// Message pour les informations de session
+message SessionInfo {
+    string session_id = 1;
+    string start_time = 2;  // Format ISO8601
+    bool is_active = 3;
+    int32 clients_connected = 4;
+}
 
 
 

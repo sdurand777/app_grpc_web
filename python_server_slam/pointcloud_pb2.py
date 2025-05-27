@@ -26,7 +26,7 @@ from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__
 from google.protobuf import duration_pb2 as google_dot_protobuf_dot_duration__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10pointcloud.proto\x12\x08IVM.slam\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/duration.proto\"I\n\x05Point\x12\t\n\x01x\x18\x01 \x01(\x01\x12\t\n\x01y\x18\x02 \x01(\x01\x12\t\n\x01z\x18\x03 \x01(\x01\x12\t\n\x01r\x18\x04 \x01(\x01\x12\t\n\x01g\x18\x05 \x01(\x01\x12\t\n\x01\x62\x18\x06 \x01(\x01\"-\n\nPointCloud\x12\x1f\n\x06points\x18\x01 \x03(\x0b\x32\x0f.IVM.slam.Point\"\x16\n\x04Pose\x12\x0e\n\x06matrix\x18\x01 \x03(\x01\"\x16\n\x05Index\x12\r\n\x05index\x18\x01 \x03(\x05\";\n\x0ePointCloudList\x12)\n\x0bpointclouds\x18\x01 \x03(\x0b\x32\x14.IVM.slam.PointCloud\")\n\x08PoseList\x12\x1d\n\x05poses\x18\x01 \x03(\x0b\x32\x0e.IVM.slam.Pose\"\\\n\x12PointCloudWithPose\x12(\n\npointCloud\x18\x01 \x01(\x0b\x32\x14.IVM.slam.PointCloud\x12\x1c\n\x04pose\x18\x02 \x01(\x0b\x32\x0e.IVM.slam.Pose\"\x86\x01\n\x08SlamData\x12\x30\n\x0epointcloudlist\x18\x01 \x01(\x0b\x32\x18.IVM.slam.PointCloudList\x12$\n\x08poselist\x18\x02 \x01(\x0b\x32\x12.IVM.slam.PoseList\x12\"\n\tindexlist\x18\x03 \x01(\x0b\x32\x0f.IVM.slam.Indexb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10pointcloud.proto\x12\x08IVM.slam\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/duration.proto\"I\n\x05Point\x12\t\n\x01x\x18\x01 \x01(\x01\x12\t\n\x01y\x18\x02 \x01(\x01\x12\t\n\x01z\x18\x03 \x01(\x01\x12\t\n\x01r\x18\x04 \x01(\x01\x12\t\n\x01g\x18\x05 \x01(\x01\x12\t\n\x01\x62\x18\x06 \x01(\x01\"-\n\nPointCloud\x12\x1f\n\x06points\x18\x01 \x03(\x0b\x32\x0f.IVM.slam.Point\"\x16\n\x04Pose\x12\x0e\n\x06matrix\x18\x01 \x03(\x01\"\x16\n\x05Index\x12\r\n\x05index\x18\x01 \x03(\x05\";\n\x0ePointCloudList\x12)\n\x0bpointclouds\x18\x01 \x03(\x0b\x32\x14.IVM.slam.PointCloud\")\n\x08PoseList\x12\x1d\n\x05poses\x18\x01 \x03(\x0b\x32\x0e.IVM.slam.Pose\"\\\n\x12PointCloudWithPose\x12(\n\npointCloud\x18\x01 \x01(\x0b\x32\x14.IVM.slam.PointCloud\x12\x1c\n\x04pose\x18\x02 \x01(\x0b\x32\x0e.IVM.slam.Pose\"\x86\x01\n\x08SlamData\x12\x30\n\x0epointcloudlist\x18\x01 \x01(\x0b\x32\x18.IVM.slam.PointCloudList\x12$\n\x08poselist\x18\x02 \x01(\x0b\x32\x12.IVM.slam.PoseList\x12\"\n\tindexlist\x18\x03 \x01(\x0b\x32\x0f.IVM.slam.Index\"c\n\x0bSessionInfo\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x12\n\nstart_time\x18\x02 \x01(\t\x12\x11\n\tis_active\x18\x03 \x01(\x08\x12\x19\n\x11\x63lients_connected\x18\x04 \x01(\x05\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -49,4 +49,6 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_POINTCLOUDWITHPOSE']._serialized_end=461
   _globals['_SLAMDATA']._serialized_start=464
   _globals['_SLAMDATA']._serialized_end=598
+  _globals['_SESSIONINFO']._serialized_start=600
+  _globals['_SESSIONINFO']._serialized_end=699
 # @@protoc_insertion_point(module_scope)

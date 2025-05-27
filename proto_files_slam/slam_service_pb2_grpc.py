@@ -76,6 +76,16 @@ class SlamServiceStub(object):
                 request_serializer=pointcloud__pb2.SlamData.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 _registered_method=True)
+        self.GetSessionInfo = channel.unary_unary(
+                '/IVM.slam.SlamService/GetSessionInfo',
+                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+                response_deserializer=pointcloud__pb2.SessionInfo.FromString,
+                _registered_method=True)
+        self.SetSessionInfo = channel.unary_unary(
+                '/IVM.slam.SlamService/SetSessionInfo',
+                request_serializer=pointcloud__pb2.SessionInfo.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                _registered_method=True)
 
 
 class SlamServiceServicer(object):
@@ -143,6 +153,20 @@ class SlamServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetSessionInfo(self, request, context):
+        """send info about session
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetSessionInfo(self, request, context):
+        """service pour envoyer/mettre à jour les infos de session sur le serveur
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SlamServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -184,6 +208,16 @@ def add_SlamServiceServicer_to_server(servicer, server):
             'ConnectSlamData': grpc.stream_unary_rpc_method_handler(
                     servicer.ConnectSlamData,
                     request_deserializer=pointcloud__pb2.SlamData.FromString,
+                    response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            ),
+            'GetSessionInfo': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSessionInfo,
+                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                    response_serializer=pointcloud__pb2.SessionInfo.SerializeToString,
+            ),
+            'SetSessionInfo': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetSessionInfo,
+                    request_deserializer=pointcloud__pb2.SessionInfo.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
     }
@@ -403,6 +437,60 @@ class SlamService(object):
             target,
             '/IVM.slam.SlamService/ConnectSlamData',
             pointcloud__pb2.SlamData.SerializeToString,
+            google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSessionInfo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/IVM.slam.SlamService/GetSessionInfo',
+            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            pointcloud__pb2.SessionInfo.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetSessionInfo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/IVM.slam.SlamService/SetSessionInfo',
+            pointcloud__pb2.SessionInfo.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options,
             channel_credentials,

@@ -303,5 +303,66 @@ proto.IVM.slam.SlamServicePromiseClient.prototype.getSlamData =
 };
 
 
+/**
+ * @const
+ * @type {!grpc.web.MethodDescriptor<
+ *   !proto.google.protobuf.Empty,
+ *   !proto.IVM.slam.SessionInfo>}
+ */
+const methodDescriptor_SlamService_GetSessionInfo = new grpc.web.MethodDescriptor(
+  '/IVM.slam.SlamService/GetSessionInfo',
+  grpc.web.MethodType.UNARY,
+  google_protobuf_empty_pb.Empty,
+  pointcloud_pb.SessionInfo,
+  /**
+   * @param {!proto.google.protobuf.Empty} request
+   * @return {!Uint8Array}
+   */
+  function(request) {
+    return request.serializeBinary();
+  },
+  pointcloud_pb.SessionInfo.deserializeBinary
+);
+
+
+/**
+ * @param {!proto.google.protobuf.Empty} request The
+ *     request proto
+ * @param {?Object<string, string>} metadata User defined
+ *     call metadata
+ * @param {function(?grpc.web.RpcError, ?proto.IVM.slam.SessionInfo)}
+ *     callback The callback function(error, response)
+ * @return {!grpc.web.ClientReadableStream<!proto.IVM.slam.SessionInfo>|undefined}
+ *     The XHR Node Readable Stream
+ */
+proto.IVM.slam.SlamServiceClient.prototype.getSessionInfo =
+    function(request, metadata, callback) {
+  return this.client_.rpcCall(this.hostname_ +
+      '/IVM.slam.SlamService/GetSessionInfo',
+      request,
+      metadata || {},
+      methodDescriptor_SlamService_GetSessionInfo,
+      callback);
+};
+
+
+/**
+ * @param {!proto.google.protobuf.Empty} request The
+ *     request proto
+ * @param {?Object<string, string>=} metadata User defined
+ *     call metadata
+ * @return {!Promise<!proto.IVM.slam.SessionInfo>}
+ *     Promise that resolves to the response
+ */
+proto.IVM.slam.SlamServicePromiseClient.prototype.getSessionInfo =
+    function(request, metadata) {
+  return this.client_.unaryCall(this.hostname_ +
+      '/IVM.slam.SlamService/GetSessionInfo',
+      request,
+      metadata || {},
+      methodDescriptor_SlamService_GetSessionInfo);
+};
+
+
 module.exports = proto.IVM.slam;
 

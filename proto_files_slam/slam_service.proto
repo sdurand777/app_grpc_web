@@ -29,6 +29,9 @@ service SlamService {
     rpc GetSlamData (google.protobuf.Empty) returns (stream SlamData);
     // Service pour envoyer les points et la pose au serveur
     rpc ConnectSlamData (stream SlamData) returns (google.protobuf.Empty);
-
-
+    
+    // send info about session
+    rpc GetSessionInfo (google.protobuf.Empty) returns (SessionInfo);
+    // service pour envoyer/mettre à jour les infos de session sur le serveur
+    rpc SetSessionInfo (SessionInfo) returns (google.protobuf.Empty);
 }

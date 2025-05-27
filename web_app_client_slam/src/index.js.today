@@ -1,0 +1,239 @@
+import { createScene, createCamera, createRenderer, createControls, createStats } from './init.js';
+import { PointCloudController } from './PointCloudController.js';
+import { PoseController } from './PoseController.js';
+import { ResetButton } from './ResetButton.js';
+import { TrajectoryToggleButton } from './TrajectoryToggleButton.js';
+import { setupResize } from './ResizeHandler.js';
+import { animate } from './AnimationLoop.js';
+import { UIOverlay } from './UIOverlay.js';
+import { SceneManager } from './SceneManager.js';
+import { createPointSizeSlider } from './PointSizeSlider.js';
+import { EnhancedStreamManager } from './EnhancedStreamManager.js';
+import { PageProtector } from './PageProtector.js';
+import PointCloudWorker from './PointCloudWorker.js';
+import PoseWorker from './PoseWorker.js';
+
+// ========== Packet Metrics ==========
+let receivedPackets = 0;
+let packetsPerSecond = 0;
+
+const packetTimer = setInterval(() => {
+  packetsPerSecond = receivedPackets;
+  receivedPackets = 0;
+}, 1000);
+
+// ========== Scene Setup ==========
+const scene = createScene();
+const camera = createCamera();
+const renderer = createRenderer();
+const controls = createControls(camera, renderer.domElement);
+const stats = createStats();
+
+// ========== Workers & Controllers ==========
+const worker = new Worker(new URL('./PointCloudWorker.js', import.meta.url));
+const poseworker = new Worker(new URL('./PoseWorker.js', import.meta.url));
+const pcController = new PointCloudController(scene, camera, renderer, worker);
+const poseController = new PoseController(scene, camera, renderer, poseworker);
+
+// ========== UI ==========
+const uiOverlay = new UIOverlay(renderer);
+const sceneManager = new SceneManager(scene);
+const resetButton = new ResetButton(sceneManager, camera, controls);
+const trajectoryToggleBtn = new TrajectoryToggleButton(poseController);
+
+// ========== Session UI Element ==========
+function createSessionUI() {
+    const sessionInfo = document.createElement('div');
+    sessionInfo.id = 'session-info';
+    sessionInfo.style.cssText = `
+        position: absolute;
+        top: 10px;
+        right: 200px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 12px;
+        border-radius: 5px;
+        width: 250px;
+        display: none;
+    `;
+    document.body.appendChild(sessionInfo);
+    return sessionInfo;
+}
+
+const sessionInfoElement = createSessionUI();
+
+function updateSessionUI(sessionStatus) {
+    if (sessionStatus) {
+        sessionInfoElement.innerHTML = `
+            <div>Session ID: ${sessionStatus.sessionId.substring(0, 20)}</div>
+            <div>Status: ${sessionStatus.isNewSession ? 'New Session' : 'Existing Session'}</div>
+            <div>Local Data: ${sessionStatus.hasLocalData ? 'Available' : 'None'}</div>
+            <div id="storage-info"></div>
+        `;
+        sessionInfoElement.style.display = 'block';
+        
+        // Mettre à jour les infos de stockage
+        updateStorageInfo();
+    }
+}
+
+async function updateStorageInfo() {
+    const storageInfo = await streamManager.getStorageInfo();
+    const storageElement = document.getElementById('storage-info');
+    if (storageInfo && storageElement) {
+        storageElement.innerHTML = `Storage: ${storageInfo.usageInMB} MB`;
+    }
+}
+
+// ========== Stream Manager ==========
+const streamManager = new EnhancedStreamManager('http://192.168.51.30:8080');
+
+// Configuration des callbacks du stream
+streamManager.setCallbacks({
+    onPointCloudData: (data) => {
+        if (data && data.pointcloudlist && data.pointcloudlist.pointclouds) {
+            const totalPoints = data.pointcloudlist.pointclouds.reduce(
+                (sum, pc) => sum + (pc.points?.length || 0), 0
+            );
+            pointsReceived += totalPoints;
+            console.log(`Points received: ${totalPoints}, Total: ${pointsReceived}`);
+        }
+        pcController.processRaw(data);
+        //updateStorageInfo(); // Mettre à jour périodiquement
+    },
+    onPoseData: (data) => {
+        if (data && data.poses) {
+            posesReceived += data.poses.length;
+            console.log(`Poses received: ${data.poses.length}, Total: ${posesReceived}`);
+        }
+        poseController.processRaw(data)
+    },
+    onPacketReceived: () => receivedPackets++,
+    onError: (streamType, error) => console.error(`Stream ${streamType} error:`, error),
+    onStatusChange: (status, error) => {
+        console.log(`Stream status: ${status}`);
+        if (error) console.error('Stream error:', error);
+    },
+    onSessionUpdate: (sessionStatus) => {
+        console.log('Session update:', sessionStatus);
+        updateSessionUI(sessionStatus);
+        
+        // Si c'est une nouvelle session, nettoyer la scène
+        if (sessionStatus.isNewSession) {
+            // sceneManager.clearScene();
+            console.log('Scene cleared for new session');
+        }
+    }
+});
+
+// ========== Cleanup ==========
+function cleanup() {
+    streamManager.stop();
+    clearInterval(packetTimer);
+    if (worker) worker.terminate();
+    if (poseworker) poseworker.terminate();
+    console.log('Application cleanup completed');
+}
+
+// ========== Page Protection ==========
+const pageProtector = new PageProtector({
+    onBeforeLeave: cleanup,
+    onLeave: (reason) => console.log(`Leaving page: ${reason}`)
+});
+
+// ========== Controls ==========
+function addDebugControls() {
+    const controlPanel = document.createElement('div');
+    controlPanel.style.cssText = `
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 12px;
+        border-radius: 5px;
+    `;
+    
+    const reloadBtn = document.createElement('button');
+    reloadBtn.textContent = 'Force Server Reload';
+    reloadBtn.style.cssText = `
+        padding: 5px 10px;
+        margin: 5px;
+        cursor: pointer;
+    `;
+    reloadBtn.onclick = async () => {
+        console.log('Forcing server reload...');
+        sceneManager.clearScene();
+        await streamManager.forceServerReload();
+    };
+    
+    const clearCacheBtn = document.createElement('button');
+    clearCacheBtn.textContent = 'Clear Cache';
+    clearCacheBtn.style.cssText = `
+        padding: 5px 10px;
+        margin: 5px;
+        cursor: pointer;
+    `;
+    clearCacheBtn.onclick = async () => {
+        if (confirm('Clear all cached data?')) {
+            await streamManager.sessionManager.db.clearAll();
+            updateStorageInfo();
+            alert('Cache cleared');
+        }
+    };
+    
+    controlPanel.appendChild(reloadBtn);
+    controlPanel.appendChild(clearCacheBtn);
+    document.body.appendChild(controlPanel);
+}
+
+// ========== Initialization ==========
+function initializeApp() {
+    console.log('Initializing application...');
+    
+    // Setup UI
+    createPointSizeSlider(pcController, { initial: 0.01 });
+    setupResize(camera, renderer);
+    addDebugControls();
+    
+    // Start streaming
+    streamManager.start();
+    
+    // Start animation loop
+    animate({ 
+        renderer, 
+        scene, 
+        camera, 
+        controls, 
+        stats, 
+        uiOverlay, 
+        pcController, 
+        getPacketRate: () => packetsPerSecond 
+    });
+    
+    console.log('Application initialized successfully');
+}
+
+// ========== Application Start ==========
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    initializeApp();
+}
+
+// ========== Debug Interface ==========
+window.debugApp = {
+    pcController,
+    poseController,
+    streamManager,
+    pageProtector,
+    getPacketRate: () => packetsPerSecond,
+    getReceivedPackets: () => receivedPackets,
+    getSessionInfo: () => streamManager.sessionManager.currentSession,
+    forceReload: () => streamManager.forceServerReload(),
+    clearCache: () => streamManager.sessionManager.db.clearAll()
+};

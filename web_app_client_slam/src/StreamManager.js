@@ -1,3 +1,5 @@
+// StreamManager to deal with grpc channels
+
 import { SlamService } from './SlamService.js';
 import { PoseService } from './PoseService.js';
 

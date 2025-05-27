@@ -26,7 +26,7 @@ from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 import pointcloud_pb2 as pointcloud__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12slam_service.proto\x12\x08IVM.slam\x1a\x1bgoogle/protobuf/empty.proto\x1a\x10pointcloud.proto2\xaf\x04\n\x0bSlamService\x12?\n\rGetPointCloud\x12\x16.google.protobuf.Empty\x1a\x14.IVM.slam.PointCloud0\x01\x12\x43\n\x11\x43onnectPointCloud\x12\x14.IVM.slam.PointCloud\x1a\x16.google.protobuf.Empty(\x01\x12O\n\x15GetPointCloudWithPose\x12\x16.google.protobuf.Empty\x1a\x1c.IVM.slam.PointCloudWithPose0\x01\x12S\n\x19\x43onnectPointCloudWithPose\x12\x1c.IVM.slam.PointCloudWithPose\x1a\x16.google.protobuf.Empty(\x01\x12\x38\n\x08GetPoses\x12\x16.google.protobuf.Empty\x1a\x12.IVM.slam.PoseList0\x01\x12<\n\x0c\x43onnectPoses\x12\x12.IVM.slam.PoseList\x1a\x16.google.protobuf.Empty(\x01\x12;\n\x0bGetSlamData\x12\x16.google.protobuf.Empty\x1a\x12.IVM.slam.SlamData0\x01\x12?\n\x0f\x43onnectSlamData\x12\x12.IVM.slam.SlamData\x1a\x16.google.protobuf.Empty(\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12slam_service.proto\x12\x08IVM.slam\x1a\x1bgoogle/protobuf/empty.proto\x1a\x10pointcloud.proto2\xb1\x05\n\x0bSlamService\x12?\n\rGetPointCloud\x12\x16.google.protobuf.Empty\x1a\x14.IVM.slam.PointCloud0\x01\x12\x43\n\x11\x43onnectPointCloud\x12\x14.IVM.slam.PointCloud\x1a\x16.google.protobuf.Empty(\x01\x12O\n\x15GetPointCloudWithPose\x12\x16.google.protobuf.Empty\x1a\x1c.IVM.slam.PointCloudWithPose0\x01\x12S\n\x19\x43onnectPointCloudWithPose\x12\x1c.IVM.slam.PointCloudWithPose\x1a\x16.google.protobuf.Empty(\x01\x12\x38\n\x08GetPoses\x12\x16.google.protobuf.Empty\x1a\x12.IVM.slam.PoseList0\x01\x12<\n\x0c\x43onnectPoses\x12\x12.IVM.slam.PoseList\x1a\x16.google.protobuf.Empty(\x01\x12;\n\x0bGetSlamData\x12\x16.google.protobuf.Empty\x1a\x12.IVM.slam.SlamData0\x01\x12?\n\x0f\x43onnectSlamData\x12\x12.IVM.slam.SlamData\x1a\x16.google.protobuf.Empty(\x01\x12?\n\x0eGetSessionInfo\x12\x16.google.protobuf.Empty\x1a\x15.IVM.slam.SessionInfo\x12?\n\x0eSetSessionInfo\x12\x15.IVM.slam.SessionInfo\x1a\x16.google.protobuf.Emptyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,5 +34,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'slam_service_pb2', _globals
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_SLAMSERVICE']._serialized_start=80
-  _globals['_SLAMSERVICE']._serialized_end=639
+  _globals['_SLAMSERVICE']._serialized_end=769
 # @@protoc_insertion_point(module_scope)

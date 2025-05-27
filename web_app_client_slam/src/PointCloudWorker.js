@@ -19,24 +19,6 @@ self.onmessage = function(event) {
             });
         }
 
-        // // === PREPARE LA POSE À ENVOYER ===
-        // let lastPoseMatrix = null;
-        // if (obj.poselist && obj.poselist.posesList && obj.poselist.posesList.length > 0) {
-        //     const lastPose = obj.poselist.posesList[obj.poselist.posesList.length - 1];
-        //     // Compatibilité protobufjs/proto
-        //     if (lastPose.matrixList && lastPose.matrixList.length === 16) {
-        //         lastPoseMatrix = lastPose.matrixList;
-        //     } else if (lastPose.matrix && lastPose.matrix.length === 16) {
-        //         lastPoseMatrix = lastPose.matrix;
-        //     } else {
-        //         // Log structure brute pour debug
-        //         console.log("Pose brute (structure inattendue):", lastPose);
-        //     }
-        // }
-
-        // juste avant self.postMessage
-        //console.log("Envoi du worker, lastPoseMatrix:", lastPoseMatrix);
-
         // Envoie aussi la matrice de la pose au main thread
         const coordsArray = new Float32Array(coordsList);
         const colorsArray = new Float32Array(colorsList);
