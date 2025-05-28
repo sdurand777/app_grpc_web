@@ -15,7 +15,7 @@
 //   requestAnimationFrame(loop);
 // }
 
-export function animate({ renderer, scene, camera, controls, stats, pcController}) {
+export function animate({ renderer, scene, camera, controls, stats, uiOverlay, pcController, getPacketRate }) {
   let last = 0;
   function loop(time) {
     stats.begin();
@@ -24,6 +24,10 @@ export function animate({ renderer, scene, camera, controls, stats, pcController
     last = time;
     controls.update();
     renderer.render(scene, camera);
+    // Met à jour l'overlay UI
+    if (uiOverlay && pcController && typeof getPacketRate === 'function') {
+      uiOverlay.update(pcController.displayCount, getPacketRate());
+    }
     stats.end();
   }
   requestAnimationFrame(loop);

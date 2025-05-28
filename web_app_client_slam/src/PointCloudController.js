@@ -2,18 +2,15 @@
 import * as THREE from 'three';
 import { DynamicDrawUsage } from 'three';
 import { enablePointDistanceMeasurement } from './PointDistanceMeasurement.js';
-import { CameraMesh } from './CameraMesh.js'; // selon ton chemin
 import { transpose16, applyPoseToMesh } from './utils.js';
-import { DatabaseManager } from './DatabaseManager.js';
+import { DataBaseManager } from './DataBaseManager.js';
 
 export class PointCloudController {
     /**
-     * @param {THREE.Scene} scene
-     * @param {THREE.Camera} camera
-     * @param {THREE.WebGLRenderer} renderer
-     * @param {Worker} worker
-     */
-    constructor(scene, camera, renderer, worker) {
+        * @param {THREE.Scene} scene
+        * @param {Worker} worker
+        */
+    constructor(scene, camera, renderer, worker, dbManager) {
         this.scene = scene;
         this.camera = camera;
         this.renderer = renderer;
@@ -28,16 +25,14 @@ export class PointCloudController {
         this.pickPositions = [] // tableau de floats
         this.pickOriginalIndices = [] // index dans le buffer principal
 
-        // Database et sauvegarde
-        this.db = null;
-        this.sessionId = null;
-        this.chunkIndex = 0;
-        this.SAVE_INTERVAL = 2000; // Sauvegarde toutes les 5000 points
-        this.unsavedPoints = 0;
-        this.tempBuffer = { coords: [], colors: [] }; // Buffer temporaire pour la sauvegarde
-
         // etat du bouton de trajectory
         this.trajectoryVisible = true;
+
+        // Database manager pour sauvegarder les chunks
+        // this.dbManager = new DataBaseManager();
+        // this.initDatabase();
+
+        this.dbManager = dbManager;
 
         // init geometry
         this._initGeometry();
@@ -45,6 +40,16 @@ export class PointCloudController {
         this.enableDistanceMeasurement();
         // setup worker
         this._setupWorker();
+    }
+
+    // Initialise la base de données
+    async initDatabase() {
+        try {
+            await this.dbManager.open();
+            console.log('✅ Base de données initialisée');
+        } catch (error) {
+            console.error('❌ Erreur initialisation DB:', error);
+        }
     }
 
     // Initialise la géométrie et les buffers
@@ -71,120 +76,6 @@ export class PointCloudController {
         this.pickmesh = new THREE.Points(this.pickgeom, pickMaterial);
     }
 
-    // Initialiser la base de données
-    async initDatabase(db) {
-        this.db = db;
-        // La session sera définie par le StreamManager
-        console.log('PointCloudController: Database initialized');
-    }
-
-    // Définir la session ID
-    setSessionId(sessionId) {
-        this.sessionId = sessionId;
-        console.log('PointCloudController: Session ID set to', sessionId);
-        
-        // Réinitialiser les compteurs pour une nouvelle session
-        this.chunkIndex = 0;
-        this.unsavedPoints = 0;
-        this.tempBuffer = { coords: [], colors: [] };
-    }
-
-    // Charger les données d'une session
-    async loadFromSession(sessionId) {
-        if (!this.db || !sessionId) return;
-        
-        console.log(`Loading point cloud data for session: ${sessionId}`);
-        
-        try {
-            const chunks = await this.db.getPointChunksBySession(sessionId);
-            console.log(`Found ${chunks.length} chunks to load`);
-            
-            // Réinitialiser les buffers
-            this.writeIndex = 0;
-            this.displayCount = 0;
-            
-            for (const chunk of chunks) {
-                const coords = chunk.coords;
-                const colors = chunk.colors;
-                const count = coords.length / 3;
-                
-                // Copier directement dans les buffers
-                const offset = this.writeIndex * 3;
-                this.posArr.set(coords, offset);
-                this.colArr.set(colors, offset);
-                
-                this.writeIndex += count;
-            }
-            
-            // Mettre à jour l'affichage
-            if (this.writeIndex > 0) {
-                this.displayCount = this.writeIndex;
-                this.geom.setDrawRange(0, this.displayCount);
-                this.posAttr.needsUpdate = true;
-                this.colAttr.needsUpdate = true;
-                
-                // Reconstruire le picking geometry
-                this._rebuildPickingGeometry();
-                
-                console.log(`Loaded ${this.displayCount} points from session ${sessionId}`);
-            }
-        } catch (error) {
-            console.error('Error loading from session:', error);
-        }
-    }
-
-    // Reconstruire la géométrie de picking après chargement
-    _rebuildPickingGeometry() {
-        this.pickPositions = [];
-        this.pickOriginalIndices = [];
-        
-        // Échantillonner les points chargés pour le picking
-        for (let i = 0; i < this.writeIndex && this.pickOriginalIndices.length < this.max_pick_points; i++) {
-            if (Math.random() < this.pick_ratio) {
-                const idx = i * 3;
-                this.pickPositions.push(
-                    this.posArr[idx],
-                    this.posArr[idx + 1],
-                    this.posArr[idx + 2]
-                );
-                this.pickOriginalIndices.push(i);
-            }
-        }
-        
-        this.pickgeom.setAttribute(
-            'position',
-            new THREE.Float32BufferAttribute(this.pickPositions, 3)
-        );
-        this.pickgeom.setDrawRange(0, this.pickPositions.length / 3);
-        this.pickgeom.computeBoundingSphere();
-    }
-
-    // Vider la scène
-    clearScene() {
-        this.writeIndex = 0;
-        this.displayCount = 0;
-        this.pickPositions = [];
-        this.pickOriginalIndices = [];
-        this.tempBuffer = { coords: [], colors: [] };
-        this.unsavedPoints = 0;
-        this.chunkIndex = 0;
-        
-        // Réinitialiser les buffers
-        this.posArr.fill(0);
-        this.colArr.fill(0);
-        
-        // Mettre à jour la géométrie
-        this.geom.setDrawRange(0, 0);
-        this.posAttr.needsUpdate = true;
-        this.colAttr.needsUpdate = true;
-        
-        // Réinitialiser la géométrie de picking
-        this.pickgeom.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
-        this.pickgeom.setDrawRange(0, 0);
-        
-        console.log('Point cloud scene cleared');
-    }
-
     // enable distance picking
     enableDistanceMeasurement() {
         return enablePointDistanceMeasurement(
@@ -209,29 +100,39 @@ export class PointCloudController {
     // Configure l'écoute du worker
     _setupWorker() {
         this.worker.onmessage = e => {
-            const { coords, colors } = e.data;
+            const { coords, colors, metadata } = e.data;
+            console.log(`🔧 Worker terminé: ${coords.length / 3} points traités`);
             this._updateBuffers(coords, colors);
+            
+            console.log("metadata : ", metadata);
+
+            // Sauvegarder directement avec les données traitées
+            if (metadata && metadata.chunkId && metadata.sequenceNumber !== null) {
+                console.log("save metadata")
+                this.saveChunkOptimized(coords, colors, metadata);
+            }
         };
     }
 
     /**
-     * Copie en bloc du worker vers le GPU buffer avec sauvegarde
-     * @param {Float32Array} coords
-     * @param {Float32Array} colors
-     */
-    async _updateBuffers(coords, colors) {
+        * Copie en bloc du worker vers le GPU buffer
+        * @param {Float32Array} coords
+        * @param {Float32Array} colors
+        */
+    _updateBuffers(coords, colors, poseMatrix) {
         const count = coords.length / 3;
         const offset = this.writeIndex * 3;
 
-        // Copier dans les buffers GPU
+        console.log(`📊 Mise à jour buffer: +${count} points (total: ${this.writeIndex + count})`);
+
         for (let i = 0; i < count; i++) {
             const idx = this.writeIndex + i;
             this.posArr[idx * 3]     = coords[i * 3];
             this.posArr[idx * 3 + 1] = coords[i * 3 + 1];
             this.posArr[idx * 3 + 2] = coords[i * 3 + 2];
-            this.colArr[idx * 3]     = colors[i * 3];
-            this.colArr[idx * 3 + 1] = colors[i * 3 + 1];
-            this.colArr[idx * 3 + 2] = colors[i * 3 + 2];
+            this.colArr[idx * 3]        = colors[i * 3];
+            this.colArr[idx * 3 + 1]    = colors[i * 3 + 1];
+            this.colArr[idx * 3 + 2]    = colors[i * 3 + 2];
         }
 
         // updateRange uniquement sur la zone nouvellement remplie
@@ -261,7 +162,7 @@ export class PointCloudController {
             }
         }
 
-        // Mise à jour du pickGeometry
+        // 4.b. Mise à jour du pickGeometry
         this.pickgeom.setAttribute(
             'position',
             new THREE.Float32BufferAttribute(this.pickPositions, 3)
@@ -274,80 +175,144 @@ export class PointCloudController {
         this.writeIndex += count;
         this.displayCount = this.writeIndex;
         this.geom.setDrawRange(0, this.displayCount);
+    }
 
-        // Gestion de la sauvegarde
-        this.unsavedPoints += count;
+    async processRaw(response) {
+        const raw = response.toObject();
         
-        // Ajouter les points au buffer temporaire
-        for (let i = 0; i < count; i++) {
-            this.tempBuffer.coords.push(
-                coords[i * 3], 
-                coords[i * 3 + 1], 
-                coords[i * 3 + 2]
-            );
-            this.tempBuffer.colors.push(
-                colors[i * 3], 
-                colors[i * 3 + 1], 
-                colors[i * 3 + 2]
-            );
+        // Log du contenu du chunk avant traitement
+        let pointCount = 0;
+        if (raw.pointcloudlist && raw.pointcloudlist.pointcloudsList) {
+            raw.pointcloudlist.pointcloudsList.forEach(pointCloud => {
+                if (pointCloud.pointsList) {
+                    pointCount += pointCloud.pointsList.length;
+                }
+            });
         }
         
-        // Sauvegarder par chunks si on a assez de points ET une session valide
-        if (this.db && this.sessionId && this.tempBuffer.coords.length >= this.SAVE_INTERVAL * 3) {
-            const chunkCoords = new Float32Array(this.tempBuffer.coords);
-            const chunkColors = new Uint8Array(this.tempBuffer.colors);
-            
-            console.log(`💾 Saving chunk ${this.chunkIndex} (${chunkCoords.length / 3} points) for session ${this.sessionId}`);
-            
-            try {
-                await this.db.savePointChunk(chunkCoords, chunkColors, this.chunkIndex++, this.sessionId);
-                
-                // Vider le buffer temporaire après sauvegarde réussie
-                this.tempBuffer = { coords: [], colors: [] };
-                this.unsavedPoints = 0;
-            } catch (error) {
-                console.error('Error saving point chunk:', error);
+        console.log(`📥 Chunk en traitement: ${pointCount} points`);
+        
+        // Extraire les métadonnées du chunk
+        const chunkId = response.getChunkId ? response.getChunkId() : null;
+        const sequenceNumber = response.getSequenceNumber ? response.getSequenceNumber() : null;
+        const sessionId = response.getSessionId ? response.getSessionId() : null;
+        const timestamp = response.getTimestamp ? response.getTimestamp() : Date.now();
+       
+        
+        console.log("chunkId : ", chunkId);
+
+        // Passer les métadonnées au worker pour éviter le double traitement
+        const metadata = (chunkId && sequenceNumber !== null) ? 
+            { chunkId, sequenceNumber, sessionId, timestamp } : null;
+        
+        
+        console.log("metadata : ", metadata)
+
+
+        this.worker.postMessage({ 
+            type: 'processPointCloud', 
+            payload: raw,
+            metadata: metadata
+        });
+    }
+
+    // Sauvegarde optimisée avec données déjà traitées par le worker
+    async saveChunkOptimized(coords, colors, metadata) {
+        try {
+
+            console.log("SaveChunkOptimized")
+
+            // Vérifier si le chunk existe déjà
+            const exists = await this.dbManager.chunkExists(metadata.chunkId);
+            if (exists) {
+                console.log(`⏭️ Chunk déjà en cache: ${metadata.chunkId}`);
+                return;
             }
+
+            // Sauvegarder directement les données traitées
+            const chunkData = {
+                chunkId: metadata.chunkId,
+                sequenceNumber: metadata.sequenceNumber,
+                sessionId: metadata.sessionId,
+                timestamp: metadata.timestamp,
+                coords: coords,
+                colors: colors
+            };
+            
+
+            console.log("Chunk save on the database")
+            await this.dbManager.saveChunk(chunkData);
+            console.log(`💾 Chunk sauvegardé: ${metadata.chunkId} (${coords.length / 3} points)`);
+            
+        } catch (error) {
+            console.error(`❌ Erreur sauvegarde chunk ${metadata.chunkId}:`, error);
         }
     }
 
-    // Forcer la sauvegarde des points en attente
-    async flush() {
-        if (this.db && this.sessionId && this.tempBuffer.coords.length > 0) {
-            const chunkCoords = new Float32Array(this.tempBuffer.coords);
-            const chunkColors = new Uint8Array(this.tempBuffer.colors);
+    // Charge et affiche des chunks depuis le cache
+    async loadChunksFromCache(sessionId) {
+        try {
+            console.log(`🔄 Chargement chunks depuis cache pour session: ${sessionId}`);
+
+            console.log("getChunksStats");
+            const cached_chunks = await this.dbManager.getChunksStats();
+            console.log("cached_chunks : ", cached_chunks);
+
+            const chunks = await this.dbManager.getChunksBySessionOrdered(sessionId);
             
-            console.log(`💾 Flushing ${chunkCoords.length / 3} points for session ${this.sessionId}`);
-            
-            try {
-                await this.db.savePointChunk(chunkCoords, chunkColors, this.chunkIndex++, this.sessionId);
-                this.tempBuffer = { coords: [], colors: [] };
-                this.unsavedPoints = 0;
-            } catch (error) {
-                console.error('Error flushing point chunk:', error);
+            console.log(`📦 ${chunks.length} chunks trouvés en cache`);
+            if (chunks.length === 0) {
+                console.log('⚠️ Aucun chunk en cache pour cette session');
+                return;
             }
+            
+            
+            // Rejouer les chunks dans l'ordre
+            for (const chunk of chunks) {
+                if (chunk.coords && chunk.colors) {
+                    console.log(`🎬 Rejeu chunk: ${chunk.chunkId} (seq: ${chunk.sequenceNumber})`);
+                    this._updateBuffers(chunk.coords, chunk.colors);
+                    
+                    // Petit délai pour l'affichage progressif
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+            
+            console.log('✅ Rejeu terminé');
+            
+        } catch (error) {
+            console.error('❌ Erreur chargement cache:', error);
         }
     }
 
-    // Traiter les données brutes
-    processRaw(response, sessionId) {
-        // Mettre à jour le sessionId si fourni
-        if (sessionId && sessionId !== this.sessionId) {
-            this.setSessionId(sessionId);
+    // Obtient les statistiques d'une session
+    async getSessionStats(sessionId) {
+        try {
+            const chunks = await this.dbManager.getChunksBySession(sessionId);
+            const totalPoints = chunks.reduce((sum, chunk) => sum + (chunk.pointCount || 0), 0);
+            
+            const stats = {
+                sessionId,
+                totalChunks: chunks.length,
+                totalPoints,
+                sequenceNumbers: chunks.map(c => c.sequenceNumber).sort((a, b) => a - b)
+            };
+            
+            console.log('📊 Stats session:', stats);
+            return stats;
+        } catch (error) {
+            console.error('❌ Erreur stats session:', error);
+            return null;
         }
-        
-        const raw = response.toObject ? response.toObject() : response;
-        this.worker.postMessage({ type: 'processPointCloud', payload: raw });
     }
 
-    // Obtenir des statistiques
-    getStats() {
-        return {
-            totalPoints: this.displayCount,
-            sessionId: this.sessionId,
-            chunksStored: this.chunkIndex,
-            unsavedPoints: this.unsavedPoints,
-            bufferUsage: (this.displayCount / this.maxPoints * 100).toFixed(2) + '%'
-        };
+    // Nettoie les chunks d'une session
+    async clearSession(sessionId) {
+        try {
+            const deletedCount = await this.dbManager.clearChunksBySession(sessionId);
+            console.log(`🗑️ Session ${sessionId} nettoyée: ${deletedCount} chunks supprimés`);
+        } catch (error) {
+            console.error('❌ Erreur nettoyage session:', error);
+        }
     }
 }

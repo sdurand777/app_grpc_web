@@ -27,8 +27,7 @@ if _version_not_supported:
 
 
 class SlamServiceStub(object):
-    """deux services
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -76,6 +75,16 @@ class SlamServiceStub(object):
                 request_serializer=pointcloud__pb2.SlamData.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 _registered_method=True)
+        self.GetSyncStatus = channel.unary_unary(
+                '/IVM.slam.SlamService/GetSyncStatus',
+                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+                response_deserializer=pointcloud__pb2.SyncStatus.FromString,
+                _registered_method=True)
+        self.GetSpecificChunks = channel.unary_stream(
+                '/IVM.slam.SlamService/GetSpecificChunks',
+                request_serializer=pointcloud__pb2.ChunkRequest.SerializeToString,
+                response_deserializer=pointcloud__pb2.DataChunk.FromString,
+                _registered_method=True)
         self.GetSessionInfo = channel.unary_unary(
                 '/IVM.slam.SlamService/GetSessionInfo',
                 request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
@@ -89,80 +98,80 @@ class SlamServiceStub(object):
 
 
 class SlamServiceServicer(object):
-    """deux services
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def GetPointCloud(self, request, context):
-        """services de bases uniquements pour les coords points
-        service pour recuperer les points du serveur
-        Utilisation correcte
+        """Services existants...
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ConnectPointCloud(self, request_iterator, context):
-        """service pour envoyer les points au serveur
-        Utilisation correcte
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetPointCloudWithPose(self, request, context):
-        """services points et poses
-        Service pour récupérer les points et la pose du serveur
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ConnectPointCloudWithPose(self, request_iterator, context):
-        """Service pour envoyer les points et la pose au serveur
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetPoses(self, request, context):
-        """service pour recuperer les poses sur le serveur
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ConnectPoses(self, request_iterator, context):
-        """service pour envoyer les poses sur le serveur
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetSlamData(self, request, context):
-        """services data slam liste de points et liste de pose et index
-        Service pour récupérer les points et la pose du serveur
+        """Service amélioré avec gestion des chunks
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ConnectSlamData(self, request_iterator, context):
-        """Service pour envoyer les points et la pose au serveur
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSyncStatus(self, request, context):
+        """Nouveaux services pour la synchronisation
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetSpecificChunks(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetSessionInfo(self, request, context):
-        """send info about session
+        """Services de session
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def SetSessionInfo(self, request, context):
-        """service pour envoyer/mettre à jour les infos de session sur le serveur
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -210,6 +219,16 @@ def add_SlamServiceServicer_to_server(servicer, server):
                     request_deserializer=pointcloud__pb2.SlamData.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
+            'GetSyncStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSyncStatus,
+                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                    response_serializer=pointcloud__pb2.SyncStatus.SerializeToString,
+            ),
+            'GetSpecificChunks': grpc.unary_stream_rpc_method_handler(
+                    servicer.GetSpecificChunks,
+                    request_deserializer=pointcloud__pb2.ChunkRequest.FromString,
+                    response_serializer=pointcloud__pb2.DataChunk.SerializeToString,
+            ),
             'GetSessionInfo': grpc.unary_unary_rpc_method_handler(
                     servicer.GetSessionInfo,
                     request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
@@ -229,8 +248,7 @@ def add_SlamServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class SlamService(object):
-    """deux services
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def GetPointCloud(request,
@@ -438,6 +456,60 @@ class SlamService(object):
             '/IVM.slam.SlamService/ConnectSlamData',
             pointcloud__pb2.SlamData.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSyncStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/IVM.slam.SlamService/GetSyncStatus',
+            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            pointcloud__pb2.SyncStatus.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSpecificChunks(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/IVM.slam.SlamService/GetSpecificChunks',
+            pointcloud__pb2.ChunkRequest.SerializeToString,
+            pointcloud__pb2.DataChunk.FromString,
             options,
             channel_credentials,
             insecure,

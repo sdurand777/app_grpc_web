@@ -24,7 +24,7 @@ def main():
     
     # Créer un SessionInfo
     session_info = pointcloud_pb2.SessionInfo()
-    session_info.session_id = "test-session-123"
+    session_info.session_id = "test-session-1234"
     session_info.start_time = datetime.now().isoformat()
     session_info.is_active = True
     session_info.clients_connected = 1

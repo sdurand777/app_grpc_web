@@ -9,8 +9,6 @@ export class SessionService {
     }
 
     async getSessionInfo() {
-
-        console.log("getSessionInfo in sessionservice")
         return new Promise((resolve, reject) => {
             const request = new Empty();
             

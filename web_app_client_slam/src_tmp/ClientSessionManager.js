@@ -21,7 +21,7 @@ export class ClientSessionManager {
         try {
             let serverSession = null;
             let retryCount = 0;
-            const maxRetries = 30; // Limite pour éviter boucle infinie (30 secondes max)
+            const maxRetries = 100; // Limite pour éviter boucle infinie (30 secondes max)
             const retryDelay = 1000; // 1 seconde entre les tentatives
             
             // Boucler tant que sessionId n'est pas rempli

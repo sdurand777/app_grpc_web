@@ -1,9 +1,45 @@
+// pointcloud.proto - Version mise à jour avec chunks identifiés
 syntax = "proto3";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 package IVM.slam;
 
-// message point pour transmettre le pcd
+// Message pour un chunk de données identifié
+message DataChunk {
+    string chunk_id = 1;           // ID unique du chunk
+    int32 sequence_number = 2;     // Numéro de séquence pour l'ordre
+    string session_id = 3;         // ID de la session
+    int64 timestamp = 4;           // Timestamp de création
+    PointCloud pointcloud = 5;     // Les points du chunk
+    Pose pose = 6;                 // La pose associée (optionnelle)
+    bool is_keyframe = 7;          // Si c'est une keyframe
+}
+
+// Message pour demander des chunks spécifiques
+message ChunkRequest {
+    string session_id = 1;
+    repeated string missing_chunk_ids = 2;  // IDs des chunks manquants
+    int32 last_sequence_number = 3;         // Dernier numéro de séquence reçu
+}
+
+// Message de réponse avec l'état de synchronisation
+message SyncStatus {
+    string session_id = 1;
+    int32 total_chunks = 2;
+    int32 latest_sequence_number = 3;
+    repeated string available_chunk_ids = 4;
+}
+
+// Mise à jour de SlamData pour inclure le chunk_id
+message SlamData {
+    PointCloudList pointcloudlist = 1;
+    PoseList poselist = 2;
+    Index indexlist = 3;
+    string chunk_id = 4;        // ID du chunk
+    int32 sequence_number = 5;  // Numéro de séquence
+}
+
+// [Garder les autres messages existants...]
 message Point {
     double x = 1;
     double y = 2;
@@ -13,59 +49,35 @@ message Point {
     double b = 6;
 }
 
-// liste de points
 message PointCloud {
     repeated Point points = 1;
 }
 
-
-// Message pour transmettre une matrice 4x4 (pose de la caméra)
 message Pose {
-    repeated double matrix = 1; // 16 valeurs pour la matrice 4x4
+    repeated double matrix = 1;
 }
 
-
-// Message pour transmettre les indices a modifier dans le visualisateur
 message Index {
     repeated int32 index = 1;
 }
 
-
-// liste de pointclouds pour chaque KFs
 message PointCloudList {
     repeated PointCloud pointclouds = 1;
 }
 
-
-// liste de poses pour chaque KFs
 message PoseList {
     repeated Pose poses = 1;
 }
 
-
-// Messages combinés pour le PCD et la pose
 message PointCloudWithPose {
     PointCloud pointCloud = 1;
     Pose pose = 2;
 }
 
-
-// message final pour la liste de PCD, la liste de poses et les indices des KFs
-message SlamData {
-    PointCloudList pointcloudlist = 1;
-    PoseList poselist = 2;
-    Index indexlist = 3;
-}
-
-
-// Message pour les informations de session
 message SessionInfo {
     string session_id = 1;
-    string start_time = 2;  // Format ISO8601
+    string start_time = 2;
     bool is_active = 3;
     int32 clients_connected = 4;
+    int32 total_chunks = 5;     // Nombre total de chunks
 }
-
-
-
-
