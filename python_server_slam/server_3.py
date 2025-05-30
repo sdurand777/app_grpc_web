@@ -142,10 +142,34 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             
         return Empty()
 
+
     def GetSlamData(self, request, context):
-        """Envoi des données SLAM avec support pour la synchronisation"""
+        """Envoi des données SLAM avec support pour la synchronisation intelligente"""
         client_id = str(uuid.uuid4())
-        logger.info(f"Client {client_id} connecté pour GetSlamData")
+        
+        # Extraire les infos du cache client depuis custom-header-1
+        metadata = dict(context.invocation_metadata())
+        client_cache_info = {
+            'lastSequence': -1,
+            'sessionId': '',
+            'chunkCount': 0
+        }
+        
+        # Parser custom-header-1
+        custom_data = metadata.get('custom-header-1', '')
+        if custom_data:
+            try:
+                import json
+                client_cache_info = json.loads(custom_data)
+                logger.info(f"📊 Cache client pour {client_id}:")
+                logger.info(f"  - lastSequence: {client_cache_info.get('lastSequence', -1)}")
+                logger.info(f"  - sessionId: {client_cache_info.get('sessionId', '')}")
+                logger.info(f"  - chunkCount: {client_cache_info.get('chunkCount', 0)}")
+            except Exception as e:
+                logger.error(f"Erreur parsing custom-header-1: {e}")
+        
+        client_last_sequence = client_cache_info.get('lastSequence', -1)
+        client_session_id = client_cache_info.get('sessionId', '')
         
         # Ajouter le client
         client_count = self.session_manager.increment_clients()
@@ -157,23 +181,47 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             
             # Initialiser l'état du client
             with self._client_lock:
-                self._client_states[client_id] = -1
+                self._client_states[client_id] = client_last_sequence
             
-            # 1. Envoyer tous les chunks existants
-            logger.info(f"Envoi des chunks historiques pour session {session_id}...")
-            historical_chunks = self.persistent_cache.get_all_chunks_for_session(session_id)
+            # Décider quoi envoyer basé sur l'état du cache client
+            if client_session_id != session_id or client_last_sequence == -1:
+                # Nouvelle session ou premier connect - envoyer tout
+                logger.info(f"❌ Cache invalide ou nouvelle session - envoi complet")
+                logger.info(f"  - Client session: '{client_session_id}' vs Server session: '{session_id}'")
+                historical_chunks = self.persistent_cache.get_all_chunks_for_session(session_id)
+                logger.info(f"📤 Envoi de {len(historical_chunks)} chunks (historique complet)")
+            else:
+                # Session existante - envoyer seulement les nouveaux chunks
+                logger.info(f"✅ Cache valide - envoi incrémental après sequence {client_last_sequence}")
+                historical_chunks = self.persistent_cache.get_chunks_after_sequence(
+                    client_last_sequence, session_id
+                )
+                logger.info(f"📤 Envoi de {len(historical_chunks)} nouveaux chunks seulement")
+                
+                # Stats d'optimisation
+                total_chunks = self.persistent_cache.get_stats()['total_chunks']
+                saved_chunks = total_chunks - len(historical_chunks)
+                if saved_chunks > 0:
+                    logger.info(f"🚀 Optimisation: {saved_chunks} chunks économisés grâce au cache client")
             
+            # Envoyer les chunks nécessaires
+            sent_count = 0
             for slam_data in historical_chunks:
                 yield slam_data
+                sent_count += 1
                 
                 # Mettre à jour le dernier numéro de séquence envoyé
                 with self._client_lock:
                     self._client_states[client_id] = slam_data.sequence_number
+                    
+                # Log de progression pour les gros envois
+                if sent_count % 100 == 0:
+                    logger.debug(f"Progression: {sent_count}/{len(historical_chunks)} chunks envoyés")
             
-            logger.info(f"Envoyé {len(historical_chunks)} chunks historiques")
+            logger.info(f"✅ Envoi initial terminé: {sent_count} chunks")
             
             # 2. Mode temps réel - surveiller les nouveaux chunks
-            logger.info("Passage en mode temps réel...")
+            logger.info("🎯 Passage en mode temps réel...")
             last_check_time = time.time()
             
             while True:
@@ -196,7 +244,7 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
                         with self._client_lock:
                             self._client_states[client_id] = slam_data.sequence_number
                         
-                        logger.debug(f"Envoyé nouveau chunk: {slam_data.chunk_id}")
+                        logger.debug(f"📦 Nouveau chunk temps réel: {slam_data.chunk_id}")
                     
                     last_check_time = current_time
                 
@@ -215,7 +263,107 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             client_count = self.session_manager.decrement_clients()
             logger.debug(f"Client déconnecté, clients restants: {client_count}")
 
+    # def GetSlamData(self, request, context):
+    #     """Envoi des données SLAM avec support pour la synchronisation"""
+    #     client_id = str(uuid.uuid4())
+    #     logger.info(f"Client {client_id} connecté pour GetSlamData")
+    #     
+    #     # Ajouter le client
+    #     client_count = self.session_manager.increment_clients()
+    #     logger.debug(f"Nombre de clients connectés: {client_count}")
+    #     
+    #     try:
+    #         session_info = self.session_manager.get_session_info()
+    #         session_id = session_info['session_id']
+    #         
+    #         # Initialiser l'état du client
+    #         with self._client_lock:
+    #             self._client_states[client_id] = -1
+    #         
+    #         # 1. Envoyer tous les chunks existants
+    #         logger.info(f"Envoi des chunks historiques pour session {session_id}...")
+    #         historical_chunks = self.persistent_cache.get_all_chunks_for_session(session_id)
+    #         
+    #         for slam_data in historical_chunks:
+    #             yield slam_data
+    #             
+    #             # Mettre à jour le dernier numéro de séquence envoyé
+    #             with self._client_lock:
+    #                 self._client_states[client_id] = slam_data.sequence_number
+    #         
+    #         logger.info(f"Envoyé {len(historical_chunks)} chunks historiques")
+    #         
+    #         # 2. Mode temps réel - surveiller les nouveaux chunks
+    #         logger.info("Passage en mode temps réel...")
+    #         last_check_time = time.time()
+    #         
+    #         while True:
+    #             current_time = time.time()
+    #             
+    #             # Vérifier les nouveaux chunks toutes les 100ms
+    #             if current_time - last_check_time > 0.1:
+    #                 with self._client_lock:
+    #                     last_sequence = self._client_states[client_id]
+    #                 
+    #                 # Récupérer les nouveaux chunks
+    #                 new_chunks = self.persistent_cache.get_chunks_after_sequence(
+    #                     last_sequence, session_id
+    #                 )
+    #                 
+    #                 # Envoyer les nouveaux chunks
+    #                 for slam_data in new_chunks:
+    #                     yield slam_data
+    #                     
+    #                     with self._client_lock:
+    #                         self._client_states[client_id] = slam_data.sequence_number
+    #                     
+    #                     logger.debug(f"Envoyé nouveau chunk: {slam_data.chunk_id}")
+    #                 
+    #                 last_check_time = current_time
+    #             
+    #             # Petite pause pour éviter la surcharge CPU
+    #             time.sleep(0.05)
+    #             
+    #     except grpc.RpcError as e:
+    #         logger.error(f"Client {client_id} déconnecté: {e.code()}")
+    #     finally:
+    #         # Nettoyer l'état du client
+    #         with self._client_lock:
+    #             if client_id in self._client_states:
+    #                 del self._client_states[client_id]
+    #         
+    #         # Retirer le client
+    #         client_count = self.session_manager.decrement_clients()
+    #         logger.debug(f"Client déconnecté, clients restants: {client_count}")
+
     def GetSessionInfo(self, request, context):
+
+        # # AJOUTER CES LIGNES pour voir les metadata
+        metadata = dict(context.invocation_metadata())
+        logger.info(f"🧪 Metadata reçus dans GetSessionInfo: {metadata}")
+        # 
+        # # Chercher spécifiquement nos metadata custom
+        # custom_headers = {k: v for k, v in metadata.items() if k.startswith('x-') and k not in ['x-user-agent', 'x-grpc-web', 'x-forwarded-proto', 'x-request-id']}
+        # if custom_headers:
+        #     logger.info(f"✅ METADATA CUSTOM TROUVÉS: {custom_headers}")
+        # else:
+        #     logger.info("❌ Aucun metadata custom trouvé")
+        #
+        #
+        # metadata = dict(context.invocation_metadata())
+        
+        # Récupérer custom-header-1
+        custom_data = metadata.get('custom-header-1', '')
+        if custom_data:
+            try:
+                import json
+                parsed_data = json.loads(custom_data)
+                logger.info(f"✅ METADATA CUSTOM: {parsed_data}")
+                logger.info(f"  - lastSequence: {parsed_data.get('lastSequence')}")
+                logger.info(f"  - cacheSize: {parsed_data.get('cacheSize')}")
+            except:
+                pass
+
         """Endpoint pour obtenir les informations de session"""
         session_info = self.session_manager.get_session_info()
         stats = self.persistent_cache.get_stats()

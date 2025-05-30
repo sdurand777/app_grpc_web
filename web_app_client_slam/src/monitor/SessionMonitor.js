@@ -1,7 +1,7 @@
 
 // SessionMonitor.js
-import { SessionService } from './SessionService.js';
-import { DataBaseManager } from './DataBaseManager.js';
+import { SessionService } from '../services/SessionService.js';
+import { DataBaseManager } from '../core/DataBaseManager.js';
 
 export class SessionMonitor {
     constructor(serverUrl, dbManager) {

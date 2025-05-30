@@ -2,8 +2,8 @@
 import * as THREE from 'three';
 import { DynamicDrawUsage } from 'three';
 import { enablePointDistanceMeasurement } from './PointDistanceMeasurement.js';
-import { transpose16, applyPoseToMesh } from './utils.js';
-import { DataBaseManager } from './DataBaseManager.js';
+import { transpose16, applyPoseToMesh } from '../core/utils.js';
+import { DataBaseManager } from '../core/DataBaseManager.js';
 
 export class PointCloudController {
     /**
@@ -258,27 +258,44 @@ export class PointCloudController {
             const cached_chunks = await this.dbManager.getChunksStats();
             console.log("cached_chunks : ", cached_chunks);
 
-            const chunks = await this.dbManager.getChunksBySessionOrdered(sessionId);
+            const chunks = await this.dbManager.getAllChunksOrdered(sessionId);
             
-            console.log(`📦 ${chunks.length} chunks trouvés en cache`);
+            //console.log(`📦 ${chunks.length} chunks trouvés en cache`);
+
+            console.log(`📦 ${chunks.length} chunks trouvés - chargement en une fois`);
+
             if (chunks.length === 0) {
                 console.log('⚠️ Aucun chunk en cache pour cette session');
                 return;
             }
             
             
-            // Rejouer les chunks dans l'ordre
-            for (const chunk of chunks) {
-                if (chunk.coords && chunk.colors) {
-                    console.log(`🎬 Rejeu chunk: ${chunk.chunkId} (seq: ${chunk.sequenceNumber})`);
-                    this._updateBuffers(chunk.coords, chunk.colors);
-                    
-                    // Petit délai pour l'affichage progressif
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-            }
+            // // Rejouer les chunks dans l'ordre
+            // for (const chunk of chunks) {
+            //     if (chunk.coords && chunk.colors) {
+            //         console.log(`🎬 Rejeu chunk: ${chunk.chunkId} (seq: ${chunk.sequenceNumber})`);
+            //         this._updateBuffers(chunk.coords, chunk.colors);
+            //         
+            //         // Petit délai pour l'affichage progressif
+            //         await new Promise(resolve => setTimeout(resolve, 50));
+            //     }
+            // }
+            // 
+            // console.log('✅ Rejeu terminé');
+
+
+            // Charger TOUS les chunks d'un coup
+            const startTime = performance.now();
             
-            console.log('✅ Rejeu terminé');
+            chunks.forEach((chunk, index) => {
+                if (chunk.coords && chunk.colors) {
+                    this._updateBuffers(chunk.coords, chunk.colors);
+                }
+            });
+            
+            const loadTime = performance.now() - startTime;
+            console.log(`✅ Rejeu terminé en ${loadTime.toFixed(2)}ms`);
+
             
         } catch (error) {
             console.error('❌ Erreur chargement cache:', error);

@@ -1,22 +1,30 @@
 
 // index.js
 // monitor session status at the beginning to connect to grpc serveur and get session infos
-import { SessionMonitor } from './SessionMonitor.js';
-import { DataBaseManager } from './DataBaseManager.js';
+import { SessionMonitor } from './monitor/SessionMonitor.js';
+import { DataBaseManager } from './core/DataBaseManager.js';
 
 // pout gerer les pcds
-import { SlamService } from './SlamService.js';
-import { PointCloudController } from './PointCloudController.js';
-import PointCloudWorker from './PointCloudWorker.js';
+import { SlamService } from './services/SlamService.js';
+import { PointCloudController } from './pointcloud/PointCloudController.js';
+import PointCloudWorker from './pointcloud/PointCloudWorker.js';
 
-import { animate } from './AnimationLoop.js';
+import { animate } from './core/AnimationLoop.js';
 
-
+// session service 
+import { SessionService } from './services/SessionService.js';
 
 // create three js scene
 import { createScene, createCamera, createRenderer, createControls, createStats } from './init.js';
 
-const SERVER_URL = 'http://localhost:8080';
+const SERVER_URL = 'http://192.168.51.179:8080';
+
+// // test metadata
+// console.log("test meta data");
+// const sessionService = new SessionService(SERVER_URL);
+// await sessionService.getSessionInfo();
+
+
 
 // database to store in cache
 const dbManager = new DataBaseManager();
@@ -33,12 +41,12 @@ const cached_session = await dbManager.getSessionInfo();
 console.log("cached_sessioninfo : ", cached_session);
 
 
-// // delete all chunks
+// delete all chunks
 // console.log("clear all chunks");
 // await dbManager.clearAllChunks();
-//
-// console.log("getChunksStats");
-// await dbManager.getChunksStats();
+
+console.log("getChunksStats");
+await dbManager.getChunksStats();
 
 // session monitor
 const monitor = new SessionMonitor(SERVER_URL, dbManager);
@@ -76,7 +84,7 @@ async function main() {
 
 
         // worker pour le pcd
-        const worker = new Worker(new URL('./PointCloudWorker.js', import.meta.url));
+        const worker = new Worker(new URL('./pointcloud/PointCloudWorker.js', import.meta.url));
 
         // controller pour le pcd
         const pcController = new PointCloudController(scene, camera, renderer, worker, dbManager);
@@ -86,7 +94,7 @@ async function main() {
         if (sessionflag)
         {
             console.log("Session Identique on load from Cache");
-            pcController.loadChunksFromCache(sessionInfo.sessionId);
+            await pcController.loadChunksFromCache(sessionInfo.sessionId);
         }
         else{
             console.log("Nouvelle Session")
@@ -95,7 +103,7 @@ async function main() {
 
 
         // service grpc pour les pcds
-        const slam = new SlamService('http://192.168.51.30:8080');
+        const slam = new SlamService(SERVER_URL, dbManager);
 
 
         // stream on pcds

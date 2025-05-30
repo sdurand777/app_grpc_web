@@ -197,6 +197,38 @@ export class DataBaseManager {
         });
     }
 
+
+    // Pour DataBaseManager.js, ajoutez cette méthode pour récupérer tous les chunks :
+    async getAllChunksOrdered() {
+        try {
+            await this.open();
+            
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction(['chunks'], 'readonly');
+                const store = transaction.objectStore('chunks');
+                const index = store.index('sequenceNumber');
+                const request = index.getAll();
+                
+                request.onsuccess = () => {
+                    const chunks = request.result;
+                    // Trier par sequenceNumber
+                    chunks.sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+                    console.log(`📦 ${chunks.length} chunks récupérés (tous)`)
+                    resolve(chunks);
+                };
+                
+                request.onerror = () => {
+                    console.error('❌ Erreur récupération chunks:', request.error);
+                    reject(request.error);
+                };
+            });
+        } catch (error) {
+            console.error('❌ Erreur getAllChunksOrdered:', error);
+            throw error;
+        }
+    }
+
+
     // Récupère les chunks d'une session dans l'ordre des sequence numbers
     async getChunksBySessionOrdered(sessionId) {
         const chunks = await this.getChunksBySession(sessionId);
@@ -272,7 +304,7 @@ export class DataBaseManager {
         }
         else
         {
-            console.log("proceeding");
+            console.log("Found existing DataBase proceeding");
         }
 
         return new Promise((resolve, reject) => {
