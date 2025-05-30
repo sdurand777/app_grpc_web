@@ -1,21 +1,5 @@
-// export function animate({ scene, camera, renderer, controls, stats }) {
-//   let lastRenderTime = 0;
-//   function loop(time) {
-//     stats.begin();
-//     requestAnimationFrame(loop);
-//     if (time - lastRenderTime < 1000 / 60) {
-//       stats.end();
-//       return;
-//     }
-//     lastRenderTime = time;
-//     controls.update();
-//     renderer.render(scene, camera);
-//     stats.end();
-//   }
-//   requestAnimationFrame(loop);
-// }
-
-export function animate({ renderer, scene, camera, controls, stats, pcController}) {
+// Animation Loop
+export function animate({ renderer, scene, camera, controls, stats, pcController, overlay}) {
   let last = 0;
   function loop(time) {
     stats.begin();
@@ -24,6 +8,12 @@ export function animate({ renderer, scene, camera, controls, stats, pcController
     last = time;
     controls.update();
     renderer.render(scene, camera);
+
+    // Met à jour l'overlay UI
+    if (overlay && pcController) {
+      overlay.update(pcController.displayCount);
+    }
+
     stats.end();
   }
   requestAnimationFrame(loop);
