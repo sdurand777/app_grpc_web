@@ -122,4 +122,38 @@ export class PoseController {
             const raw = response.toObject();
             this.worker.postMessage({ type: 'processPoseList', payload: raw });
         }
+
+
+    resetBuffersPose() {
+        console.log("🔄 Reset des buffers de trajectoire et sphères");
+
+        // Réinitialiser la trajectoire
+        this.cameraTrajectory = [];
+
+        // Vider la trajectoireGeometry
+        this.trajectoryGeometry.setAttribute(
+            'position',
+            new THREE.Float32BufferAttribute([], 3)
+        );
+        this.trajectoryGeometry.setDrawRange(0, 0);
+        this.trajectoryGeometry.computeBoundingSphere();
+        this.trajectoryGeometry.attributes.position.needsUpdate = true;
+
+        // Supprimer les sphères de la scène et vider le tableau
+        if (this.sphereMarkers && this.sphereMarkers.length) {
+            this.sphereMarkers.forEach(sphere => {
+                this.scene.remove(sphere);
+                if (sphere.geometry) sphere.geometry.dispose();
+                if (sphere.material) sphere.material.dispose();
+            });
+            this.sphereMarkers = [];
+        }
+
+        // Réinitialiser l'index de la pose si besoin
+        this.poseIndex = 0;
+
+        console.log("✅ Trajectoire et sphères réinitialisées");
+    }
+
+
 }

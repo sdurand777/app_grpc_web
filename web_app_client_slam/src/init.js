@@ -33,3 +33,26 @@ export function createStats() {
     document.body.appendChild(stats.dom);
     return stats;
 }
+
+
+export function resetScene(scene) {
+    while (scene.children.length > 0) {
+        const child = scene.children[0];
+        scene.remove(child);
+
+        // Si l'objet a des ressources (géométrie, matériaux, textures), les libérer
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+            if (Array.isArray(child.material)) {
+                child.material.forEach(mat => mat.dispose());
+            } else {
+                child.material.dispose();
+            }
+        }
+
+        // Si l'objet est un groupe ou a des enfants, les nettoyer aussi
+        if (child.children && child.children.length > 0) {
+            resetScene(child);
+        }
+    }
+}

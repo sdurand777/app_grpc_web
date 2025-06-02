@@ -37,9 +37,19 @@ export class PointCloudController {
         // init geometry
         this._initGeometry();
         // enable picking
-        this.enableDistanceMeasurement();
+        // Stocker la référence pour pouvoir nettoyer plus tard
+        this.distanceMeasurement = null;
+        this.distanceMeasurement = this.enableDistanceMeasurement();
         // setup worker
         this._setupWorker();
+    }
+
+    // Ajouter une méthode de nettoyage
+    dispose() {
+        // Nettoyer le distance measurement
+        if (this.distanceMeasurement && this.distanceMeasurement.dispose) {
+            this.distanceMeasurement.dispose();
+        }
     }
 
     // Initialise la base de données
@@ -332,4 +342,77 @@ export class PointCloudController {
             console.error('❌ Erreur nettoyage session:', error);
         }
     }
+
+
+    // resetBuffers() {
+    //     // Réinitialiser writeIndex et displayCount
+    //     this.writeIndex = 0;
+    //     this.displayCount = 0;
+    //
+    //     // Mettre à zéro les tableaux de positions et couleurs (optionnel mais propre)
+    //     this.posArr.fill(0);
+    //     this.colArr.fill(0);
+    //
+    //     // Mettre à jour les attributs avec updateRange complet
+    //     this.posAttr.updateRange.offset = 0;
+    //     this.posAttr.updateRange.count = this.posArr.length;
+    //     this.posAttr.needsUpdate = true;
+    //
+    //     this.colAttr.updateRange.offset = 0;
+    //     this.colAttr.updateRange.count = this.colArr.length;
+    //     this.colAttr.needsUpdate = true;
+    //
+    //     // Réinitialiser le drawRange pour ne rien dessiner
+    //     this.geom.setDrawRange(0, 0);
+    //
+    //     // Vider la géométrie du picking aussi
+    //     this.pickPositions = [];
+    //     this.pickOriginalIndices = [];
+    //     this.pickgeom.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+    //     this.pickgeom.setDrawRange(0, 0);
+    //     this.pickgeom.computeBoundingSphere();
+    //     this.pickgeom.attributes.position.needsUpdate = true;
+    //
+    //     console.log("🔄 Buffers reset : position, couleur et picking vidés.");
+    // }
+
+
+    resetBuffers() {
+        // Réinitialiser writeIndex et displayCount
+        this.writeIndex = 0;
+        this.displayCount = 0;
+
+        // Mettre à zéro les tableaux de positions et couleurs (optionnel mais propre)
+        this.posArr.fill(0);
+        this.colArr.fill(0);
+
+        // Mettre à jour les attributs avec updateRange complet
+        this.posAttr.updateRange.offset = 0;
+        this.posAttr.updateRange.count = this.posArr.length;
+        this.posAttr.needsUpdate = true;
+
+        this.colAttr.updateRange.offset = 0;
+        this.colAttr.updateRange.count = this.colArr.length;
+        this.colAttr.needsUpdate = true;
+
+        // Réinitialiser le drawRange pour ne rien dessiner
+        this.geom.setDrawRange(0, 0);
+
+        // Vider la géométrie du picking aussi
+        this.pickPositions = [];
+        this.pickOriginalIndices = [];
+        
+        // CHANGEMENT PRINCIPAL: Retirer l'attribut position au lieu de le vider
+        this.pickgeom.deleteAttribute('position');
+        this.pickgeom.setDrawRange(0, 0);
+        
+        // OU Alternative: Mettre la boundingSphere à null
+        // this.pickgeom.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+        // this.pickgeom.setDrawRange(0, 0);
+        // this.pickgeom.boundingSphere = null;
+        
+        console.log("🔄 Buffers reset : position, couleur et picking vidés.");
+    }
+
+
 }

@@ -2,14 +2,18 @@
 // SessionMonitor.js
 import { SessionService } from '../services/SessionService.js';
 import { DataBaseManager } from '../core/DataBaseManager.js';
+import { resetScene } from '../init.js';
 
 export class SessionMonitor {
-    constructor(serverUrl, dbManager) {
+    constructor(serverUrl, dbManager, pcController, poseController, scene) {
         this.sessionService = new SessionService(serverUrl);
         // 1 seconde
         this.pollingInterval = 1000;
         this.shouldStop = false;
         this.dbManager = dbManager;
+        this.pcController = pcController;
+        this.poseController = poseController;
+        this.scene = scene;
 
     }
 
@@ -111,11 +115,24 @@ export class SessionMonitor {
             if (cachedSession.sessionId == sessionInfo.sessionId)
             {
                 console.log('✅ Session identique à celle du cache, pas de mise à jour nécessaire.');
+
+                // recuperation du cache existant
+                console.log('♻️ La session reste la meme, recuperation cache 3D existant ...');
+                await this.pcController.loadChunksFromCache(sessionInfo.sessionId);
                 return true;
             }
             else{
                 console.log('♻️ La session a changé, mise à jour du cache Session...');
                 await this.dbManager.saveSessionInfo(sessionInfo);
+                console.log('♻️ La session a changé, vide cache 3D existant ...');
+                await this.dbManager.clearAllChunks();
+                // // clean scene
+                // console.log('♻️ La session a changé, vide la scene ...');
+                // console.log('♻️ Reset PointCloudController Buffer ...');
+                // this.pcController.resetBuffers();
+                // console.log('♻️ Reset PoseController Buffer ...');
+                // this.poseController.resetBuffersPose();
+
             }
 
         } else {
