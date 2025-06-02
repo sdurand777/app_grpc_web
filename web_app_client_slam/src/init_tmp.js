@@ -20,7 +20,7 @@ export function createRenderer() {
         alpha: true // Permettre la transparence pour voir le logo en arrière-plan
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(new THREE.Color(0.39, 0.39, 0.39), 0.8); // Couleur avec alpha pour transparence partielle
+    renderer.setClearColor(new THREE.Color(1.0, 1.0, 1.0), 0.0); // Couleur avec alpha pour transparence partielle
     document.body.appendChild(renderer.domElement);
     return renderer;
 }
@@ -38,35 +38,6 @@ export function createStats() {
 }
 
 export function setBackgroundLogo(renderer, logoPath = './IVM.jpg', opacity = 0.3, sizePercent = 0.8, theme = 'default') {
-    // Définir les couleurs selon le thème
-    const themeColors = {
-        darker: {
-            whitePixels: [50, 50, 50],
-            blackPixels: [0, 0, 0],
-            backgroundColor: [50/255, 50/255, 50/255] // Même couleur que les pixels blancs
-        },
-        default: {
-            whitePixels: [100, 100, 100],
-            blackPixels: [50, 50, 50],
-            backgroundColor: [100/255, 100/255, 100/255] // Même couleur que les pixels blancs
-        },
-        brighter: {
-            whitePixels: [150, 150, 150],
-            blackPixels: [100, 100, 100],
-            backgroundColor: [150/255, 150/255, 150/255] // Même couleur que les pixels blancs
-        }
-    };
-    
-    const currentTheme = themeColors[theme] || themeColors.default;
-    
-    // Appliquer la couleur de fond du renderer pour avoir un fond uniforme
-    const [bgR, bgG, bgB] = currentTheme.backgroundColor;
-    renderer.setClearColor(new THREE.Color(bgR, bgG, bgB), 0.0);
-    
-    // NOUVEAU : Appliquer la même couleur au background de la page HTML
-    const [r, g, b] = currentTheme.whitePixels;
-    document.body.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-    
     // Créer un élément canvas pour le logo en filigrane
     const logoCanvas = document.createElement('canvas');
     logoCanvas.style.position = 'absolute';
@@ -78,9 +49,6 @@ export function setBackgroundLogo(renderer, logoPath = './IVM.jpg', opacity = 0.
     logoCanvas.style.zIndex = '-1'; // DERRIÈRE le canvas Three.js
     logoCanvas.style.opacity = opacity.toString();
     logoCanvas.id = 'backgroundLogo';
-    
-    // NOUVEAU : Appliquer la couleur de fond au canvas du logo aussi
-    logoCanvas.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
     
     // Ajouter le canvas au DOM - utiliser document.body si parentElement n'existe pas
     const parent = renderer.domElement.parentElement || document.body;
@@ -97,7 +65,6 @@ export function setBackgroundLogo(renderer, logoPath = './IVM.jpg', opacity = 0.
     function processImageData(imageData, theme) {
         const data = imageData.data;
         const threshold = 128;
-        const colors = themeColors[theme] || themeColors.default;
         
         for (let i = 0; i < data.length; i += 4) {
             const r = data[i];
@@ -109,11 +76,35 @@ export function setBackgroundLogo(renderer, logoPath = './IVM.jpg', opacity = 0.
             let newR, newG, newB;
             
             if (gray > threshold) {
-                // Pixels blancs - utiliser les couleurs du thème
-                [newR, newG, newB] = colors.whitePixels;
+                // Pixels blancs - traitement selon le thème
+                switch (theme) {
+                    case 'darker':
+                        newR = newG = newB = 50; // [50,50,50]
+                        break;
+                    case 'default':
+                        newR = newG = newB = 100; // [100,100,100]
+                        break;
+                    case 'brighter':
+                        newR = newG = newB = 150; // [150,150,150]
+                        break;
+                    default:
+                        newR = newG = newB = 100;
+                }
             } else {
-                // Pixels noirs - utiliser les couleurs du thème
-                [newR, newG, newB] = colors.blackPixels;
+                // Pixels noirs - traitement selon le thème
+                switch (theme) {
+                    case 'darker':
+                        newR = newG = newB = 0; // Garder noir pour darker
+                        break;
+                    case 'default':
+                        newR = newG = newB = 50; // [50,50,50]
+                        break;
+                    case 'brighter':
+                        newR = newG = newB = 100; // [100,100,100]
+                        break;
+                    default:
+                        newR = newG = newB = 50;
+                }
             }
             
             data[i] = newR;     // R
@@ -131,10 +122,8 @@ export function setBackgroundLogo(renderer, logoPath = './IVM.jpg', opacity = 0.
         const img = new Image();
         
         img.onload = function() {
-            // Appliquer la couleur de fond au canvas
-            const [r, g, b] = currentTheme.whitePixels;
-            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-            ctx.fillRect(0, 0, logoCanvas.width, logoCanvas.height);
+            // Effacer le canvas
+            ctx.clearRect(0, 0, logoCanvas.width, logoCanvas.height);
             
             // Calculer les dimensions pour le pourcentage spécifié de l'écran
             const maxWidth = logoCanvas.width * sizePercent;
