@@ -36,9 +36,11 @@ export class PLYExporter {
             const result = this.exporter.parse(validPointsObject, { binary });
             
             // Générer nom de fichier avec timestamp
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const finalFilename = `${filename}_${timestamp}`;
+            // const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            // const finalFilename = `${filename}_${timestamp}`;
             
+            const finalFilename = filename;
+
             // Télécharger le fichier
             await this._downloadFile(result, `${finalFilename}.ply`, binary);
             

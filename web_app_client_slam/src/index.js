@@ -50,6 +50,9 @@ const dbManager = new DataBaseManager();
 // NOUVEAU : Créer l'exporteur PLY
 const plyExporter = new PLYExporter();
 
+// MODIFICATION LÉGÈRE : Variable pour stocker le sessionId courant
+let currentSessionId = null;
+
 console.log('🎉 Initialisation de la scène 3D...');
 const scene = createScene();
 const camera = createCamera();
@@ -131,15 +134,35 @@ await dbManager.getChunksStats();
 // session monitor
 const monitor = new SessionMonitor(SERVER_URL, dbManager, pcController, poseController, scene);
 
+// MODIFICATION LÉGÈRE : Fonction pour générer un nom de fichier basé sur sessionId
+function generatePLYFilename() {
+    if (!currentSessionId) {
+        // Fallback si pas de sessionId disponible
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        return `pointcloud_${timestamp}`;
+    }
+    
+    // Nettoyer le sessionId pour en faire un nom de fichier valide
+    const cleanSessionId = currentSessionId
+        .replace(/[^a-zA-Z0-9\-_]/g, '_')  // Remplacer les caractères spéciaux par _
+        .replace(/_{2,}/g, '_');           // Remplacer les _ multiples par un seul
+    
+    return cleanSessionId;
+}
+
 // NOUVEAU : Fonction d'export PLY à la fin du stream
 async function exportPointCloudOnStreamEnd() {
     try {
         console.log('🚀 Export PLY automatique en fin de stream...');
         
+        // MODIFICATION : Utiliser le générateur de nom de fichier
+        const filename = generatePLYFilename();
+        console.log(`📁 Nom de fichier PLY: ${filename}.ply`);
+        
         // Export du point cloud actuellement affiché
         const success = await plyExporter.exportFromController(
             pcController, 
-            'pointcloud_stream_end'
+            filename
         );
         
         if (success) {
@@ -167,9 +190,13 @@ window.mainMenu = {
     hide: () => mainMenu.container.style.display = 'none'
 };
 
-// NOUVEAU : API globale pour l'export PLY manuel
+// MODIFICATION LÉGÈRE : API globale pour l'export PLY manuel
 window.plyExport = {
-    exportNow: () => plyExporter.exportFromController(pcController, 'pointcloud_manual')
+    exportNow: () => {
+        const filename = generatePLYFilename();
+        console.log(`📁 Export PLY manuel: ${filename}.ply`);
+        return plyExporter.exportFromController(pcController, filename);
+    }
 };
 
 // Garder cette méthode importante
@@ -184,11 +211,13 @@ document.addEventListener('keydown', (e) => {
         mainMenu.toggleVisibility();
     }
     
-    // NOUVEAU : Raccourci pour export PLY manuel (Ctrl + E)
+    // MODIFICATION LÉGÈRE : Raccourci pour export PLY manuel (Ctrl + E)
     if (e.key === 'E' && e.ctrlKey) {
         e.preventDefault();
         console.log('🎯 Export PLY manuel déclenché');
-        plyExporter.exportFromController(pcController, 'pointcloud_manual');
+        const filename = generatePLYFilename();
+        console.log(`📁 Export PLY manuel: ${filename}.ply`);
+        plyExporter.exportFromController(pcController, filename);
     }
 });
 
@@ -203,6 +232,10 @@ async function mainLoop() {
                 await new Promise(resolve => setTimeout(resolve, 5000));
                 continue;
             }
+
+            // MODIFICATION LÉGÈRE : Stocker seulement le sessionId
+            currentSessionId = sessionInfo.sessionId;
+            console.log("📋 SessionId stocké:", currentSessionId);
 
             const sessionflag = await monitor.CheckAndUpdateCache();
             
