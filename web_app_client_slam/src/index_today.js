@@ -18,9 +18,6 @@ import { animate } from './core/AnimationLoop.js';
 // session service 
 import { SessionService } from './services/SessionService.js';
 
-// NOUVEAU : Import de l'exporteur PLY
-import { PLYExporter } from './export/PLYExporter.js';
-
 // UI
 // clear button
 import { DatabaseClearButton } from './ui/DatabaseClearButton.js';
@@ -44,11 +41,13 @@ import { MainMenu } from './ui/MainMenu.js';
 
 const SERVER_URL = 'http://192.168.51.179:8080';
 
+// // test metadata
+// console.log("test meta data");
+// const sessionService = new SessionService(SERVER_URL);
+// await sessionService.getSessionInfo();
+
 // database to store in cache
 const dbManager = new DataBaseManager();
-
-// NOUVEAU : Créer l'exporteur PLY
-const plyExporter = new PLYExporter();
 
 console.log('🎉 Initialisation de la scène 3D...');
 const scene = createScene();
@@ -131,31 +130,6 @@ await dbManager.getChunksStats();
 // session monitor
 const monitor = new SessionMonitor(SERVER_URL, dbManager, pcController, poseController, scene);
 
-// NOUVEAU : Fonction d'export PLY à la fin du stream
-async function exportPointCloudOnStreamEnd() {
-    try {
-        console.log('🚀 Export PLY automatique en fin de stream...');
-        
-        // Export du point cloud actuellement affiché
-        const success = await plyExporter.exportFromController(
-            pcController, 
-            'pointcloud_stream_end'
-        );
-        
-        if (success) {
-            console.log('✅ Export PLY automatique réussi');
-        } else {
-            console.warn('⚠️ Export PLY automatique échoué');
-        }
-        
-        return success;
-        
-    } catch (error) {
-        console.error('❌ Erreur lors de l\'export PLY automatique:', error);
-        return false;
-    }
-}
-
 // ===== API GLOBALE SIMPLIFIÉE =====
 // API globale pour contrôler le menu
 window.mainMenu = {
@@ -165,11 +139,6 @@ window.mainMenu = {
     setTheme: (theme) => mainMenu.setTheme(theme),
     show: () => mainMenu.container.style.display = 'block',
     hide: () => mainMenu.container.style.display = 'none'
-};
-
-// NOUVEAU : API globale pour l'export PLY manuel
-window.plyExport = {
-    exportNow: () => plyExporter.exportFromController(pcController, 'pointcloud_manual')
 };
 
 // Garder cette méthode importante
@@ -182,13 +151,6 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'M' && e.ctrlKey) {
         e.preventDefault();
         mainMenu.toggleVisibility();
-    }
-    
-    // NOUVEAU : Raccourci pour export PLY manuel (Ctrl + E)
-    if (e.key === 'E' && e.ctrlKey) {
-        e.preventDefault();
-        console.log('🎯 Export PLY manuel déclenché');
-        plyExporter.exportFromController(pcController, 'pointcloud_manual');
     }
 });
 
@@ -217,6 +179,17 @@ async function mainLoop() {
 
                 // Nettoyer toute la scène
                 scene.clear();
+
+                // // Nettoyer l'ancien pcController
+                // if (pcController && pcController.points) {
+                //     scene.remove(pcController.points);
+                //     scene.remove(pcController.pickmesh);
+                // }
+                // 
+                // // Nettoyer l'ancien poseController  
+                // if (poseController && poseController.trajectoryLine) {
+                //     scene.remove(poseController.trajectoryLine);
+                // }
                 
                 // Terminer les anciens workers
                 if (worker) worker.terminate();
@@ -275,18 +248,9 @@ async function mainLoop() {
                 }, 1000);
             });
 
-            console.warn("🔁 Fin du flux détectée. Export PLY et redémarrage du monitoring...");
-            
-            // NOUVEAU : Export automatique à la fin du stream
-            await exportPointCloudOnStreamEnd();
-
+            console.warn("🔁 Fin du flux détectée. Redémarrage du monitoring...");
         } catch (error) {
             console.error("Erreur détectée:", error);
-            
-            // NOUVEAU : Export PLY aussi en cas d'erreur (fin de stream détectée par erreur)
-            console.log("🚨 Erreur détectée - Export PLY avant redémarrage...");
-            await exportPointCloudOnStreamEnd();
-            
             console.log("Nouvelle tentative dans 5 secondes...");
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
