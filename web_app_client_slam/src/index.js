@@ -42,7 +42,7 @@ import { ViewResetButton } from './ui/ViewResetButton.js';
 // NOUVEAU : Import du menu principal
 import { MainMenu } from './ui/MainMenu.js';
 
-const SERVER_URL = 'http://192.168.51.179:8080';
+const SERVER_URL = 'http://0.0.0.0:8080';
 
 // database to store in cache
 const dbManager = new DataBaseManager();
