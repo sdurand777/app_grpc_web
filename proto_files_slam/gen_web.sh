@@ -8,8 +8,8 @@
 #   --grpc-web_out=import_style=commonjs,mode=grpcwebtext:.
 
 protoc \
-  --plugin=protoc-gen-js=/home/ivm/node_modules/.bin/protoc-gen-js \
-  --plugin=protoc-gen-grpc-web=/home/ivm/node_modules/.bin/protoc-gen-grpc-web \
+  --plugin=protoc-gen-js=$HOME/node_modules/.bin/protoc-gen-js \
+  --plugin=protoc-gen-grpc-web=$HOME/node_modules/.bin/protoc-gen-grpc-web \
   --js_out=import_style=commonjs,binary:. \
   --grpc-web_out=import_style=commonjs,mode=grpcwebtext:. \
   -I. \
