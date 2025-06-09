@@ -326,5 +326,6 @@ async function mainLoop() {
     }
 }
 
+
 console.log('✅ Menu principal initialisé avec tous les contrôleurs');
 mainLoop();

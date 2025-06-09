@@ -56,11 +56,12 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
         self._client_states = {}  # client_id -> last_sequence_number
         self._client_lock = threading.Lock()
         
-        # Moniteur de stream
-        self.stream_monitor = StreamMonitor(timeout_seconds=30)
+        # Moniteur de stream basé sur l'état de la session
+        self.stream_monitor = StreamMonitor(timeout_seconds=5)  # Timeout plus long
+        self.stream_monitor.set_session_manager(self.session_manager)  # NOUVEAU: Injection
         self.stream_monitor.add_timeout_callback(self._handle_stream_timeout)
         self.stream_monitor.start()
-        
+
     def _handle_stream_timeout(self):
         """Gère le timeout du stream"""
         logger.warning("🏁 Fin du stream détectée - nettoyage en cours...")
@@ -137,6 +138,8 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             available_chunk_ids=sync_status['available_chunk_ids']
         )
     
+
+
     def GetSpecificChunks(self, request, context):
         """Envoie des chunks spécifiques demandés par le client"""
         logger.info(f"Client demande {len(request.missing_chunk_ids)} chunks manquants")
@@ -168,6 +171,8 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             else:
                 logger.warning(f"Chunk demandé non trouvé: {chunk_id}")
 
+
+
     def ConnectPoses(self, request_iterator, context):
         """Réception d'un stream de PoseList côté client."""
         logger.info("Réception d'un stream PoseList (ConnectPoses) du client...")
@@ -179,6 +184,8 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             logger.debug(f"Reçu PoseList contenant {len(poselist.poses)} poses.")
             self._global_buffer_poses.append(poselist)
         return Empty()
+
+
 
     def GetPoses(self, request, context):
         """Envoi d'un stream de PoseList vers le client."""
@@ -195,9 +202,14 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
         except grpc.RpcError as e:
             logger.error(f"Erreur RPC dans GetPoses: {e.code()}, message : {e.details()}")
 
+
+
     def ConnectSlamData(self, request_iterator, context):
         """Réception des données SLAM et création de chunks"""
         logger.info("Réception des slam data du client...")
+        
+        # Signaler l'activité au monitor (nouvelles keyframes reçues)
+        self.stream_monitor.update_activity()
         
         # Mettre à jour la session comme active
         current_session = self.session_manager.get_session_info()
@@ -212,11 +224,9 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             )
             self.session_manager.update_from_proto(session_update)
         
+        data_count = 0
         try:
             for data in request_iterator:
-                # Mettre à jour l'activité à chaque réception
-                self.stream_monitor.update_activity()
-                
                 # Créer des chunks à partir des données reçues
                 chunk_ids = self.persistent_cache.add_slam_data(
                     data.pointcloudlist, 
@@ -224,6 +234,8 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
                     data.indexlist, 
                     self.VOXEL_SIZE_SEND
                 )
+                
+                data_count += 1
                 
                 if DEBUG_CLIENT and chunk_ids:
                     logger.debug(f"Créé {len(chunk_ids)} nouveaux chunks")
@@ -241,9 +253,10 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             logger.error(f"Erreur dans ConnectSlamData: {e}")
         finally:
             # Marquer la fin du stream
-            logger.info("📡 Stream ConnectSlamData terminé")
+            logger.info(f"📡 Stream ConnectSlamData terminé ({data_count} paquets dans cette connexion)")
             
         return Empty()
+
 
     def GetSlamData(self, request, context):
         """Envoi des données SLAM avec support pour la synchronisation intelligente"""
@@ -276,6 +289,22 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
         client_last_sequence = client_cache_info.get('lastSequence', -1)
         client_session_id = client_cache_info.get('sessionId', '')
         
+
+        # Vérification simple basée uniquement sur is_active
+        session_info = self.session_manager.get_session_info()
+        initial_session_id = session_info.get('session_id', '')
+        is_active = session_info.get('is_active', False)
+        
+        logger.info(f"📋 État initial serveur:")
+        logger.info(f"  - Session ID: '{initial_session_id}'")
+        logger.info(f"  - Active: {is_active}")
+        
+        # SIMPLE: Rejeter seulement si session inactive
+        if not is_active:
+            logger.warning("❌ Session inactive - fermeture connexion")
+            return
+ 
+
         # Ajouter le client
         client_count = self.session_manager.increment_clients()
         logger.debug(f"Nombre de clients connectés: {client_count}")
@@ -368,6 +397,13 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             client_count = self.session_manager.decrement_clients()
             logger.debug(f"Client déconnecté, clients restants: {client_count}")
 
+
+
+
+
+
+
+
     def GetSessionInfo(self, request, context):
         # PAS de mise à jour d'activité ici car c'est juste une requête d'info
         # qui ne devrait pas réinitialiser le timeout
@@ -402,17 +438,51 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
 
 
 
+    # def SetSessionInfo(self, request, context):
+    #     """Endpoint pour recevoir/mettre à jour les informations de session depuis un client"""
+    #     try:
+    #         # Mettre à jour l'activité
+    #         self.stream_monitor.update_activity()
+    #         
+    #         self.session_manager.update_from_proto(request)
+    #         
+    #         if not request.is_active:
+    #             logger.info("Session marquée comme inactive, nettoyage du cache...")
+    #             self.persistent_cache.clear_cache()
+    #         
+    #     except Exception as e:
+    #         logger.error(f"Erreur lors de la mise à jour de SessionInfo: {e}")
+    #         context.set_code(grpc.StatusCode.INTERNAL)
+    #         context.set_details(f"Erreur lors de la mise à jour: {str(e)}")
+    #         
+    #     return Empty()
+
+
     def SetSessionInfo(self, request, context):
         """Endpoint pour recevoir/mettre à jour les informations de session depuis un client"""
         try:
-            # Mettre à jour l'activité
-            self.stream_monitor.update_activity()
+            # NOUVEAU: Log de l'état de la session reçue
+            logger.info(f"📝 SetSessionInfo reçu:")
+            logger.info(f"  - Session ID: {request.session_id}")
+            logger.info(f"  - Active: {request.is_active}")
+            logger.info(f"  - Start time: {request.start_time}")
+            logger.info(f"  - Clients: {request.clients_connected}")
             
+            # Mettre à jour l'activité du monitor si la session est active
+            if request.is_active:
+                self.stream_monitor.update_activity()
+                logger.debug("🔄 Session active - activité mise à jour")
+            
+            # Mettre à jour le session manager
             self.session_manager.update_from_proto(request)
             
+            # Si session marquée comme inactive, préparer le nettoyage
             if not request.is_active:
-                logger.info("Session marquée comme inactive, nettoyage du cache...")
-                self.persistent_cache.clear_cache()
+                logger.warning("🛑 Session marquée comme inactive par le client")
+                logger.info("🗑️ Préparation du nettoyage du cache...")
+                # Ne pas nettoyer immédiatement, laisser le StreamMonitor gérer ça
+            else:
+                logger.debug("✅ Session active confirmée par le client")
             
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour de SessionInfo: {e}")
@@ -421,10 +491,14 @@ class SlamServiceServicer(slam_service_pb2_grpc.SlamServiceServicer):
             
         return Empty()
 
+
     def shutdown(self):
         """Arrêt propre du service"""
         logger.info("🛑 Arrêt du service SLAM...")
         self.stream_monitor.stop()
+
+
+
 
 def serve():
     server = grpc.server(
